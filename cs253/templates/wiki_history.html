@@ -1,0 +1,17 @@
+{% extends "wiki_base.html" %}
+{% block title %}History{% endblock %}
+{% block content%}
+	{% for entry in entries %}
+		<div class="blog">
+			<div class="blog-id">
+				#{{entry.key().id()}}
+				<a href="/wiki/{{entry.key().id()}}{{page_path}}">View</a>
+				<a href="/wiki/_edit/{{entry.key().id()}}{{page_path}}">Edit</a>
+			</div><br>
+			<div class="blog-created">{{entry.created}}</div>
+			<div class="blog-subject">{{entry.wiki_title}}</div>
+			<div class="blog-content">{{entry.wiki_body}}</div>
+		</div>
+	{% endfor %}
+{% endblock %}
+

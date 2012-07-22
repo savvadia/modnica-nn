@@ -1,0 +1,43 @@
+application: savvadia
+version: 7
+runtime: python27
+api_version: 1
+threadsafe: false
+
+libraries:                                                                      
+- name: jinja2                                                                  
+  version: latest                                                               
+- name: markupsafe                                                              
+  version: latest 
+
+handlers:
+- url: /(.*css)
+  static_files: stylesheets/\1
+  upload: stylesheets/(.*)
+- url: /wiki.*  
+  script: wiki.py
+- url: /unit6_ascii_w_cache.*  
+  script: unit6_asciiWCache.py
+- url: /unit5_hw.*  
+  script: unit5_hw_json.py
+- url: /unit5_ascii_w_map  
+  script: unit5_asciiWMap.py
+- url: /unit4_cookie  
+  script: unit4.py
+- url: /unit4_hw.*  
+  script: unit4_hw_account.py
+- url: /unit3_ascii  
+  script: unit3.py
+- url: /unit3_hw_blog.*
+  script: unit3_hw_blog.py
+- url: /hw2.*  
+  script: unit2_hw.py
+- url: /testform      
+  script: helloworld.py
+- url: /helloworld
+  script: helloworld.py
+- url: /
+  static_files: index.html
+  upload: index.html
+
+

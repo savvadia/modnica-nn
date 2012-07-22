@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Главная{% endblock %}
+{% block content%}
+	{% for entry in articles %}
+		<div class="article">
+			<div class="article-subject">{{entry.title}}</div>
+			<div class="article-content">{{entry.content}}</div>
+		</div>
+	{% endfor %}
+{% endblock %}
+

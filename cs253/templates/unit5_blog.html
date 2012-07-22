@@ -1,0 +1,16 @@
+{% extends "unit5_base.html" %}
+{% block title %}Blog{% endblock %}
+{% block content%}
+	<a href="/unit5_hw_json/users">Users</a><br>
+	<a href="/unit5_hw_json/newpost">Post new!</a><br>
+	<hr>
+	{% for entry in entries %}
+		<div class="blog">
+			<div class="blog-id"><a href="/unit5_hw_json/{{entry.key().id()}}">#{{entry.key().id()}}</a></div><br>
+			<div class="blog-created">{{entry.created}}</div>
+			<div class="blog-subject">{{entry.title}}</div>
+			<div class="blog-content">{{entry.body}}</div>
+		</div>
+	{% endfor %}
+{% endblock %}
+

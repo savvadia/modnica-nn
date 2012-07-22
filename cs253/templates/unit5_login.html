@@ -1,0 +1,30 @@
+{% extends "unit5_base.html" %}
+{% block title %}Blog{% endblock %}
+{% block content%}
+	<form method="post">
+	
+	<table>
+	<tr>
+	    <td><label>Username</td>
+		<td><input name="username" value={{username}}></label></td>
+		<td><span style="color: red">{{username_error}}</span></td>
+	</tr><tr>
+		<td><label>Password</td>
+		<td><input name="password" type="password"></label></td>
+		<td><span style="color: red">{{password_error}}</span></td>
+	</tr>
+	</table>
+
+	<input type="submit" value="Login">
+	</form>
+	
+	<hr>
+	Login form should say "Hello, username" if the several checks are ok:<br>
+	<ul>
+	<li> username is known</li>
+	<li> password is correct</li>
+	</ul>
+	After that the user can logout.
+	<hr>
+{% endblock %}
+

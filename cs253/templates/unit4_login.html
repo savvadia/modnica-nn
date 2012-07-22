@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+
+<html>
+	<head>
+		<title>Account</title>
+	</head>
+	
+	<style type="text/css">
+		body {
+			font-family: sans-serif;
+			width: 800px;
+			margin: 0 auto;
+			padding: 10px;
+		}
+
+		table {
+			border: solid;
+			border-color: purple;
+		}
+		
+		table, th , tr, td {
+			width: 800px;
+			margin: 10px auto;
+			padding: 1px;
+		}
+		
+		.error {
+			color: red
+		}
+		
+		label {
+			display: block;
+			font-size: 20px;
+		}
+		
+		input[type=submit] {
+			font-size: 24px;
+		}
+		
+		input[type=text] {
+			width: 400px;
+			font-size: 20px;
+			padding: 2px;
+		}
+		
+		hr {
+			margin: 20px auto;
+		}
+				
+	</style>
+
+	<body>
+		<h1>Login</h1>
+		
+		<a href="/unit4_hw_cookie/">Back</a><br>
+		<a href="/unit4_hw_cookie/signup">signup</a><br>
+
+		<form method="post">
+		
+		<table>
+		<tr>
+		    <td><label>Username</td>
+			<td><input name="username" value={{username}}></label></td>
+			<td><span style="color: red">{{username_error}}</span></td>
+		</tr><tr>
+			<td><label>Password</td>
+			<td><input name="password" type="password"></label></td>
+			<td><span style="color: red">{{password_error}}</span></td>
+		</tr>
+		</table>
+
+		<input type="submit">
+		</form>
+		
+		<hr>
+		Login form should say "Hello, username" if the several checks are ok:<br>
+		<ul>
+		<li> username is known</li>
+		<li> password is correct</li>
+		</ul>
+		After that the user can logout.
+		<hr>
+
+	</body>
+</html>

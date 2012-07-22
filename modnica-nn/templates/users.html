@@ -1,0 +1,40 @@
+{% extends "cabinet.html" %}
+{% block subtitle %}Пользователи{% endblock %}
+{% block subcontent%}
+	<div class="error">{{error}}</div>
+
+	<table>
+	<tr>
+		<th>ID</th>
+		<th>Имя</th>
+		<th>Зарегистрирован</th>
+		<th>Является администратором</th>
+		<th>Сохранить</th>
+	</tr>
+	{% for entry in entries %}
+	<tr>
+	<form method="post">
+		<td>
+		<label>
+			<input type="hidden" name="user-id" value="{{entry.key().id()}}">
+			{{entry.key().id()}}
+		</label>
+		</td>
+		<td>{{entry.username}}</td>
+		<td>{{entry.created}}</td>
+		<td>
+		<label>
+			{% if  entry.isAdmin: %}
+			<input type="checkbox" name="user-isAdmin" checked="checked">
+			{% else: %}
+			<input type="checkbox" name="user-isAdmin">
+			{% endif %}
+		</label>
+		</td>
+		<td><input type="submit" value="Сохранить"></td>
+	</form>
+	</tr>
+	{% endfor %}
+	</table>
+{% endblock %}
+

@@ -1,0 +1,8 @@
+{% extends "wiki_base.html" %}
+{% block title %}{{wiki_entry.wiki_title}}{% endblock %}
+{% block content%}
+	{{wiki_entry.wiki_body}}
+	<br>
+	<br>
+	<div class="footer">Page created {{wiki_entry.created}} by {{wiki_entry.createdBy}}</div>
+{% endblock %}

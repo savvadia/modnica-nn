@@ -1,0 +1,25 @@
+{% extends "unit5_base.html" %}
+{% block title %}New post{% endblock %}
+{% block content%}
+	<form method="post">
+		<label>
+			<div>Subject</div>
+			<input type="text" name="subject" value="{{title}}">
+		</label>
+		<label>
+			<div>Content</div>
+			<textarea name="content">{{body}}</textarea>
+		</label>
+		
+		<div class="error">{{error}}</div>
+		<input type="submit" value="Post">
+	</form>
+	
+	<hr>
+	
+	<div class="back">
+		<a href="/unit5_hw_json">Back to blog</a>
+	</div>
+{% endblock %}
+
+

@@ -1,0 +1,114 @@
+body {
+	font-family: sans-serif;
+	width: 800px;
+	margin: 0 auto;
+	padding: 10px;
+}
+
+.error {
+	color: red
+}
+
+label {
+	display: block;
+	font-size: 20px;
+}
+
+textarea {
+	width: 400px;
+	height: 200px;
+	font-size: 17 px;
+	font-family: monospace;
+}
+
+
+input[type=submit] {
+	font-size: 24px;
+}
+
+input[type=text] {
+	width: 400px;
+	font-size: 20px;
+	padding: 2px;
+}
+
+hr {
+	margin: 20px auto;
+}
+
+table {
+	border: solid;
+	border-color: purple;
+}
+
+table, th , tr, td {
+	width: 800px;
+	margin: 10px auto;
+	padding: 1px;
+}
+
+.article + .article {
+	margin-top: 30px;
+}
+
+.article-id, .article-created {
+	float: right;
+	font-weight: bold;
+	font-size: 10px;
+}
+
+.article-subject {
+	font-weight: bold;
+	font-size: 20px;
+}
+
+.article-content {
+	margin: 0;
+	font-size: 17px;
+	color: purple;
+}
+
+.account {
+	font-size: 10px;
+	font-weight: bold;
+	float: right;
+	background-color: #ec9bca;
+	color: #9F1558;
+	padding: 3px;
+}
+
+.map {
+	position: absolute;
+	right: 100px;
+	top: 145px;
+}
+
+.article + .article {
+	margin-top: 20px;
+}
+
+.article-title {
+	font-weight: bold;
+	font-size: 20px;
+}
+
+.article-body {
+	margin: 0;
+	font-size: 17px;
+	color: purple;
+}
+
+.content {
+	font-family: sans-serif;
+	width: 100%;
+	margin: 0 auto;
+	padding: 10px;
+	border-color: red;
+}
+
+.footer {
+	display: block;
+	color: grey;
+	font-size: 10px;
+}
+

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+
+<html>
+	<head>
+		<title>Account</title>
+	</head>
+	
+	<style type="text/css">
+		body {
+			font-family: sans-serif;
+			width: 800px;
+			margin: 0 auto;
+			padding: 10px;
+		}
+		
+		.error {
+			color: red
+		}
+		
+		label {
+			display: block;
+			font-size: 20px;
+		}
+		
+		input[type=submit] {
+			font-size: 24px;
+		}
+		
+		hr {
+			margin: 20px auto;
+		}
+		
+	</style>
+
+	<body>
+		<h1>Users</h1>
+		
+		{{cookie_message}}
+		<br>
+		<a href="/unit5_hw_json/signup">Signup</a><br>
+		{%
+			if message: %}
+				<a href="/unit5_hw_json/logout">Logout</a><br>
+				{{message}}
+		{%
+			else: 
+		%}
+				<a href="/unit5_hw_json/login">Login</a><br>
+		{%
+			endif 
+		%}
+		<a href="/unit5_hw_json">Back</a><br>
+		<hr>
+
+		{% for entry in entries %}
+			<div class="login">
+				<pre class="login-id">{{entry.id}}</pre>
+				<div class="login-created">{{entry.created}}</div>
+				<div class="login-username">User: {{entry.username}}</div>
+			</div>
+		{% endfor %}
+
+	</body>
+</html>

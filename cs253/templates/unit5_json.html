@@ -1,0 +1,12 @@
+{% extends "unit5_base.html" %}
+{% block title %}Users{% endblock %}
+{% block content%}
+	{% for entry in entries %}
+		<div class="login">
+			<div class="login-id">{{entry.id}}</div>
+			<div class="login-created">{{entry.created}}</div>
+			<div class="login-username">User: {{entry.username}}</div>
+		</div>
+	{% endfor %}
+{% endblock %}
+
