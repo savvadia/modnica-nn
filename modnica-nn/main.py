@@ -244,14 +244,15 @@ class ModnicaArticlesEdit(ModnicaAccount):
 		key      =  "page-"+page_id+"-"+page_path
 		title    = self.request.get("title")
 		content  = self.request.get("content")
+		pagePath = self.request.get("pagePath")
 		created    = ""
-		logging.error("FIXME: " +title+"/"+content+" >> id=<"+page_id+">, path=<"+page_path+">")
+		logging.error("FIXME: " +title+"/"+content+" >> id=<"+page_id+">, pagePath=<"+pagePath+">, path=<"+page_path+">")
 		if not title or not body:
-			#title = page_path
 			entry, cache_age_message = getFromCacheOrDb(key, page_path, page_id)
 			if entry:
 				title = entry.title
 				content  = entry.content
+				pagePath = entry.pagePath
 				created    = entry.created
 				createdBy  = entry.createdBy
 				logging.error("prepared for page edit:" + page_id + page_path)
@@ -259,7 +260,7 @@ class ModnicaArticlesEdit(ModnicaAccount):
 				logging.error("ModnicaArticlesEdit:get(): entry not found: " + page_id + page_path)
 				self.redirect("/articles/post")
 				return
-		self.render_form(page_id, title=title, content=content)
+		self.render_form(page_id, title=title, content=content, pagePath=pagePath)
 		
 	def post(self, page_id, page_path):
 		username = self.getCurrentUsername()
@@ -268,16 +269,20 @@ class ModnicaArticlesEdit(ModnicaAccount):
 			return
 		title = self.request.get("title")
 		content  = self.request.get("content")
+		pagePath = self.request.get("pagePath")
 		if not title:
-			title = page_path
-		if content:
-			a = Article(title=title, content=content, createdBy=username,isLatest=True)
-			saveRecord(page_path, a)
-			self.redirect("/articles/" + str(a.key().id()))
-			memcache.flush_all()
-		else:
-			error = "we need both title and body!"
-			self.render_front("form.html", title=title, body=body)
+			error = "Title is mandatory"
+		if not content:
+			error = "The article is empty"
+		if not pagePath:
+			error = "The path is empty"
+		if error:
+			self.render_front("form.html", title=title, body=body, pagePath=pagePath)
+			return
+		a = Article(title=title, content=content, createdBy=username, pagePath=pagePath, isLatest=True)
+		saveRecord(page_path, a)
+		self.redirect("/articles/" + pagePath)
+		memcache.flush_all()
 
 class ModnicaArticlesView(ModnicaAccount):
 	def render_form(self, page_id, title="", content="", error="", **kw):
@@ -590,7 +595,7 @@ class User(db.Model):
 class Article(db.Model):
 	title     = db.StringProperty(required = True)
 	content   = db.TextProperty(required = True)
-	page_path = db.TextProperty()
+	pagePath  = db.TextProperty()
 	isMain    = db.BooleanProperty(default = False)
 	isLatest  = db.BooleanProperty(default = False)
 	idInMenu  = db.IntegerProperty(default = -1)
