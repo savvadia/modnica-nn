@@ -137,7 +137,7 @@ class WikiAccount(MainPageHandler):
 				return username
 		return None
 
-	def render_front(self, template, cache_age_message="Page is no cached", **kw):
+	def render_front(self, template, cache_age_message="Page is not cached", **kw):
 		#for e in entries:
 		#	debug = db.to_dict(e)
 		#	logging.info("DEBUG: ====>" + str(debug) + " ::: ")

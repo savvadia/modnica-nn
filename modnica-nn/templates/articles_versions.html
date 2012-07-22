@@ -1,11 +1,6 @@
 {% extends "cabinet.html" %}
-{% block subtitle %}Статьи{% endblock %}
+{% block subtitle %}Статьи :: версии{% endblock %}
 {% block subcontent%}
-    <div id="links" class="links">
-		<a href="/articles/post">Написать новую</a>
-	</div>
-	<hr>
-	
 	<div class="error">{{error}}</div>
 
 	<form method="post">
@@ -14,6 +9,7 @@
 		<th>ID</th>
 		<th>Название</th>
 		<th>Текст</th>
+		<th>Путь</th>
 		<th>Является отображаемой версией</th>
 		<th>Действия</th>
 	</tr>
@@ -22,6 +18,7 @@
 		<td>{{entry.key().id()}}</td>
 		<td>{{entry.title}}</td>
 		<td>{{entry.created}}</td>
+		<td>{{entry.pagePath}}</td>
 		<td>
 		<label>
 			{% if  entry.isLatest: %}
@@ -32,8 +29,8 @@
 		</label>
 		</td>
 		<td>
-			<a href="/articles/{{entry.key().id()}}{{page_path}}">View</a>
-			<a href="/articles/edit/{{entry.key().id()}}{{page_path}}">Edit</a>
+			<a href="/articles/{{entry.key().id()}}">View</a>
+			<a href="/articles/edit/{{entry.key().id()}}">Edit</a>
 		</td>
 	</tr>
 	{% endfor %}

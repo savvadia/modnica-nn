@@ -86,7 +86,7 @@ def format_date_for_json(dt):
 #----------------------------------------------
 
 class ModnicaAccount(MainPageHandler):
-	def render_front(self, template, **kw):
+	def render_front(self, template, cache_age_message="Page is not cached", **kw):
 		#logging.info("DEBUG: ====>" + "ModnicaPage.render_front()")
 		#for e in entries:
 		#	debug = db.to_dict(e)
@@ -102,7 +102,7 @@ class ModnicaAccount(MainPageHandler):
 		cookie_message="cookie=%s, empty=%s" % (username_cookie, 
 		                                        str(valid_cookie(username_cookie)))
 
-		self.render(template, message=message, cookie_message=cookie_message, **kw)
+		self.render(template, message=message, cookie_message=cookie_message, cache_age_message=cache_age_message, **kw)
 
 	def getCurrentUsername(self):
 		#logging.info("DEBUG: ====>" + "WikiPage.render_front()")
@@ -150,8 +150,11 @@ class ModnicaUsers(ModnicaAccount):
 class ModnicaArticles(ModnicaAccount):
 
 	def get(self):
-		logging.error("DB QUERY :: SELECT * FROM Article")
-		entries = db.GqlQuery("SELECT * FROM Article ORDER BY created DESC LIMIT 100")
+		query = Article.all()
+		query.filter("isLatest =", True)
+		query.order("title")
+		logging.error("DB QUERY: " + show_query(query))
+		entries = query.fetch(100)
 		self.render_front("articles.html", entries=entries)
 
 	def post(self):
@@ -181,39 +184,45 @@ class ModnicaArticles(ModnicaAccount):
 
 class ModnicaArticlesVersions(ModnicaAccount):
 
-	def get(self, page_path):
-		logging.error("DB QUERY :: SELECT * WHERE page_path = "+page_path+" FROM Article")
-		entries = db.GqlQuery("SELECT * FROM Article ORDER BY created DESC LIMIT 100")
-		self.render_front("articles.html", entries=entries)
+	def get(self, pagePath):
+		query = Article.all()
+		query.filter("pagePath =", pagePath)
+		query.order("-created")
+		logging.error("DB QUERY: " + show_query(query))
+		entries = query.fetch(100)
+		self.render_front("articles_versions.html", entries=entries)
 
 	def post(self, page_path):
-		logging.info("ModnicaUsers:post(): ====>" + str(self.request) + " ::: ")
-		logging.info("ModnicaUsers:post(): ====>" + str(self.request.params) + " ::: ")
-		
-		articleId  = self.request.get("article-isMain")
-		isMain     = self.request.get("article-isMain")
+		articleId  = self.request.get("article-isLatest")
+		isLatest   = self.request.get("article-isLatest")
 
-		articles  = Article.all().filter("isMain", True).fetch(1)
+		logging.info("ModnicaArticlesVersions:post(): ====> articleId=" + str(articleId))
+
+		articles  = Article.all().filter("isLatest", True).filter("pagePath =", page_path).fetch(10)
+		article = None
 		if articles:
 			for article in articles:
 				if article.key().id() != articleId:
-					article.isMain = False
-					logging.info("DEBUG: ====> clearing isMain for " + str(article.key().id()))
+					article.isLatest = False
+					logging.info("DEBUG: ====> clearing isLatest for " + str(article.key().id()))
 					article.put()
-		
-		if (not article) or (article.key().id() != articleId):
-			article    = Article.get_by_id(int(articleId))
-			if article:
-				article.isMain = bool(isMain)
-				logging.info("DEBUG: ====> setting isMain=" + str(isMain) + " for " + str(articleId))
-				article.put()
+				else:
+					logging.info("no need to update isLatest for "+page_path+" : " + str(article.key().id()))
+					self.redirect("/articles")
+					return
+
+		article    = Article.get_by_id(int(articleId))
+		if article:
+			article.isLatest = bool(isLatest)
+			logging.info("DEBUG: ====> setting isLatest=" + str(isLatest) + " for " + str(articleId))
+			article.put()
 		memcache.flush_all()
 
 		self.redirect("/articles")
 
 class ModnicaArticlesPost(ModnicaAccount):
-	def render_form(self, title="", content="", error=""):
-		self.render_front("post_article.html", title=title, content=content, error=error)
+	def render_form(self, title="", content="", error="", **kw):
+		self.render_front("post_article.html", title=title, content=content, error=error, **kw)
 
 	def get(self):
 		self.render_form()
@@ -232,8 +241,8 @@ class ModnicaArticlesPost(ModnicaAccount):
 			self.render_form(title, content, error)
 
 class ModnicaArticlesEdit(ModnicaAccount):
-	def render_form(self, page_id, title="", content="", error=""):
-		self.render_front("edit_article.html", title=title, content=content, error=error)
+	def render_form(self, page_id, title="", content="", error="", **kw):
+		self.render_front("edit_article.html", title=title, content=content, error=error, **kw)
 
 	def get(self, page_path, page_id):
 		username = self.getCurrentUsername()
@@ -241,14 +250,14 @@ class ModnicaArticlesEdit(ModnicaAccount):
 			self.redirect("/login")
 			return		
 		
-		key      =  "page-"+page_id+"-"+page_path
 		title    = self.request.get("title")
 		content  = self.request.get("content")
 		pagePath = self.request.get("pagePath")
 		created    = ""
+		key      =  "page-"+page_id+"-"+pagePath
 		logging.error("FIXME: " +title+"/"+content+" >> id=<"+page_id+">, pagePath=<"+pagePath+">, path=<"+page_path+">")
-		if not title or not body:
-			entry, cache_age_message = getFromCacheOrDb(key, page_path, page_id)
+		if not title or not content:
+			entry, cache_age_message = getFromCacheOrDb(key, pagePath, page_id)
 			if entry:
 				title = entry.title
 				content  = entry.content
@@ -260,10 +269,11 @@ class ModnicaArticlesEdit(ModnicaAccount):
 				logging.error("ModnicaArticlesEdit:get(): entry not found: " + page_id + page_path)
 				self.redirect("/articles/post")
 				return
-		self.render_form(page_id, title=title, content=content, pagePath=pagePath)
+		self.render_form(page_id, title=title, content=content, pagePath=pagePath, cache_age_message=cache_age_message)
 		
 	def post(self, page_id, page_path):
 		username = self.getCurrentUsername()
+		error = None
 		if not username:
 			self.redirect("/login")
 			return
@@ -279,6 +289,16 @@ class ModnicaArticlesEdit(ModnicaAccount):
 		if error:
 			self.render_front("form.html", title=title, body=body, pagePath=pagePath)
 			return
+		query = Article.all()
+		query.filter("pagePath =", pagePath)
+		query.filter("isLatest =", True)
+		logging.error("DB QUERY: " + show_query(query))
+		entries = query.fetch(100)
+		for e in entries:
+			logging.error("===========+> CLEARING IS_LATEST for " + pagePath + ", id=" + str(e.key().id()))
+			e.isLatest = False
+			logging.error("e=<"+str(e)+">")
+			saveRecord(page_path, e)
 		a = Article(title=title, content=content, createdBy=username, pagePath=pagePath, isLatest=True)
 		saveRecord(page_path, a)
 		self.redirect("/articles/" + pagePath)
@@ -288,8 +308,9 @@ class ModnicaArticlesView(ModnicaAccount):
 	def render_form(self, page_id, title="", content="", error="", **kw):
 		self.render_front("view_article.html", title=title, content=content, error=error, **kw)
 
-	def get(self, page_path, page_id):
+	def get(self, page_path, page_id, pagePath):
 		username = self.getCurrentUsername()
+		logging.error("ModnicaArticlesView:get(): id=<"+page_id+">, pagePath=<"+pagePath+">, path=<"+page_path+">")
 		
 		key      =  "page-"+page_id+"-"+page_path
 		entry, cache_age_message = getFromCacheOrDb(key, page_path, page_id)
@@ -349,18 +370,22 @@ def show_query(query):
 # [+] CACHE
 #----------------------------------------------
 
-def getFromCacheOrDb(key, page_path, page_id = None):
+def getFromCacheOrDb(key, page_path, page_id = None, pagePath = None):
 	data = memcache.get(key)
 	cache_age=0
 	entry = None
 
+	if not page_id and not pagePath:
+		logging.error("no data is provided!")
+		return None, "not cached"
+	
 	if data is None:
 		if page_id:
 			logging.error("DB QUERY: get_by_id()")
 			entry = Article.get_by_id(int(page_id))
 		else:
 			query = Article.all()
-			query.filter("page_path =", page_path)
+			query.filter("pagePath =", pagePath)
 			query.order("-created")
 			logging.error("DB QUERY: " + show_query(query))
 			entries = query.fetch(1)
@@ -595,12 +620,12 @@ class User(db.Model):
 class Article(db.Model):
 	title     = db.StringProperty(required = True)
 	content   = db.TextProperty(required = True)
-	pagePath  = db.TextProperty()
+	pagePath  = db.StringProperty()
 	isMain    = db.BooleanProperty(default = False)
 	isLatest  = db.BooleanProperty(default = False)
 	idInMenu  = db.IntegerProperty(default = -1)
 	created   = db.DateTimeProperty(auto_now_add = True)
-	createdBy = db.TextProperty()
+	createdBy = db.StringProperty()
 
 def top_articles(update = False):
 	key = 'top'
@@ -649,21 +674,21 @@ class MainPage(ModnicaAccount):
 # [+] ROUTING
 #----------------------------------------------
 
-PAGE_RE = r'(/(?:[a-zA-Z0-9_-]+/?)*)'
+PAGE_RE = r'((?:[a-zA-Z0-9_-]+/?)*)'
 app = webapp2.WSGIApplication(
-                               [
-                                ('/', 	            MainPage),
-                                ('/users',    		ModnicaUsers),
-                                ('/articles', 		ModnicaArticles),
-                                ('/articles/post', 				ModnicaArticlesPost),
-                                ('(/articles/edit/?([0-9]*))', 	ModnicaArticlesEdit),
-                                ('/articles/versions' + PAGE_RE, 	ModnicaArticlesVersions),
-                                ('(/articles/?([0-9]*))', 		ModnicaArticlesView),
-                                ('/signup',   					ModnicaSignup),
-                                ('/login',         				ModnicaLogin),
-                                ('/logout',         			ModnicaLogout)
-                                ],
-                               debug=True)
+   [
+	('/', 	            				MainPage),
+	('/users',    						ModnicaUsers),
+	('/articles', 						ModnicaArticles),
+	('/articles/post', 					ModnicaArticlesPost),
+	('(/articles/edit/?([0-9]*))', 		ModnicaArticlesEdit),
+	('/articles/versions/' + PAGE_RE, 	ModnicaArticlesVersions),
+	('(/articles/?([0-9]*))/' + PAGE_RE,ModnicaArticlesView),
+	('/signup',   						ModnicaSignup),
+	('/login',         					ModnicaLogin),
+	('/logout',         				ModnicaLogout)
+	],
+   debug=True)
 
 
 app.run()

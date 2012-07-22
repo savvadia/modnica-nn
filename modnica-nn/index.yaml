@@ -18,6 +18,23 @@ indexes:
 
 - kind: Article
   properties:
+  - name: isLatest
+  - name: title
+
+- kind: Article
+  properties:
+  - name: isLatest
+  - name: title
+    direction: desc
+
+- kind: Article
+  properties:
+  - name: pagePath
+  - name: created
+    direction: desc
+
+- kind: Article
+  properties:
   - name: page_path
   - name: created
     direction: desc
