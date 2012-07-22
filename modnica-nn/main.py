@@ -211,10 +211,6 @@ class ModnicaArticlesVersions(ModnicaAccount):
 
 		self.redirect("/articles")
 
-#----------------------------------------------
-# [+] MAIN: ARTICLES
-#----------------------------------------------
-
 class ModnicaArticlesPost(ModnicaAccount):
 	def render_form(self, title="", content="", error=""):
 		self.render_front("post_article.html", title=title, content=content, error=error)
@@ -594,6 +590,7 @@ class User(db.Model):
 class Article(db.Model):
 	title     = db.StringProperty(required = True)
 	content   = db.TextProperty(required = True)
+	page_path = db.TextProperty()
 	isMain    = db.BooleanProperty(default = False)
 	isLatest  = db.BooleanProperty(default = False)
 	idInMenu  = db.IntegerProperty(default = -1)
