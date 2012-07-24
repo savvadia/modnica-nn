@@ -648,27 +648,24 @@ def top_articles(update = False):
 
 class MainPage(ModnicaAccount):
 	def render_form(self, title="", content="", error=""):
-		logging.error("DB QUERY :: SELECT * FROM Article WHERE main")
-		articles = db.GqlQuery("SELECT * FROM Article "
-							   "WHERE isMain = True AND isLatest = True"
-							   "LIMIT 1")
-		self.render_front("main.html", title=title, content=content, error=error, articles=articles)
+		key = 'MainPage'
+		entries = memcache.get(key)
+		if entries is None:
+			articles = memcache.get(key)
+			query = Article.all()
+			query.filter("isMain =", True)
+			query.filter("isLatest =", True)
+			logging.error("DB QUERY: " + show_query(query))
+			entries = query.fetch(1)
+			if entries:
+				# memcache.set(key, (entries, datetime.datetime.now()))
+				logging.error("stored CACHE for " + key)
+			else:
+				logging.error("MAIN PAGE NOT FOUND")
+		self.render_front("main.html", title=title, content=content, error=error, entries=entries)
 
 	def get(self):
 		self.render_form()
-		
-	def post(self):
-		title = self.request.get("title")
-		content   = self.request.get("content")
-		if title and content:
-			a = Article(title=title,content=content)
-			a.put()
-			memcache.flush_all()
-			
-			self.redirect("")
-		else:
-			error = "we need both title and content!"
-			self.render_form(title, content, error)
 
 #----------------------------------------------
 # [+] ROUTING
