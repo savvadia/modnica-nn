@@ -116,7 +116,68 @@ class ModnicaAccount(MainPageHandler):
 			if username:
 				return username
 		return None
+	
+	# returns one entry and text message about cache age
+	def getDbEntry(self, key, query):
+		if not key:
+			logging.error("getDbEntry(): WARNING: no key is provided")
+		else:
+			data = memcache.get(key)[0]
+			entry, saving_time = data[0], data[1]
+			if entry:
+				logging.error("used CACHE with key=" + key)
+				diff = datetime.datetime.now() - saving_time
+				cache_age_message = "Queried %s seconds ago" % diff.seconds
+				return entry, cache_age_message
+		
+		if not query:
+			logging.error("getDbEntry(): ERROR: no query is provided, key=" + key)
+			return None, "not cached"
+			
+		entries = query.fetch(1)
+		if not entries:
+			logging.error("getDbEntry(): ERROR: query returned no data, key=" + key)
+			return None, "not cached"
+			
+		entry = entries[0]
+		memcache.set(key, (entry, datetime.datetime.now()))
+		logging.error("stored CACHE for " + key)
+		return entry, "not cached"
+		
+	# returns one entry and text message about cache age
+	def getDbEntries(self, key, query, noOfEntries = 100):
+		if not key:
+			logging.error("getDbEntries(): WARNING: no key is provided")
+		else:
+			data = memcache.get(key)
+			if data:
+				entries, saving_time = data[0], data[1]
+				logging.error("used CACHE with key=" + key)
+				diff = datetime.datetime.now() - saving_time
+				cache_age_message = "Queried %s seconds ago" % diff.seconds
+				return entries, cache_age_message
+		
+		if not query:
+			logging.error("getDbEntries(): ERROR: no query is provided, key=" + key)
+			return None, "not cached"
+			
+		logging.error("DB QUERY: " + show_query(query))
+		entries = query.fetch(noOfEntries)
+		if not entries:
+			logging.error("getDbEntries(): ERROR: query returned no data, key=" + key)
+			return None, "not cached"
+			
+		memcache.set(key, (entries, datetime.datetime.now()))
+		logging.error("stored CACHE for " + key)
+		return entries, "not cached"
 
+	def saveObj(obj, keyList = {}):
+		obj.put()
+		logging.error("DB QUERY: SAVED " + repr(obj))
+		#logging.info("DEBUG: ====>" + str(db.to_dict(a)) + " ::: " + str(a.key().id()))
+		for key in keyList:
+			memcache.delete(key)
+			logging.error("cleared CACHE for " + key)
 
 #----------------------------------------------
 # [+] USERS
@@ -648,21 +709,14 @@ def top_articles(update = False):
 
 class MainPage(ModnicaAccount):
 	def render_form(self, title="", content="", error=""):
-		key = 'MainPage'
-		entries = memcache.get(key)
+		query = Article.all()
+		query.filter("isMain =", True)
+		query.filter("isLatest =", True)
+		entries, cache_age_message = self.getDbEntries("main-page", query, 1)
+		
 		if entries is None:
-			articles = memcache.get(key)
-			query = Article.all()
-			query.filter("isMain =", True)
-			query.filter("isLatest =", True)
-			logging.error("DB QUERY: " + show_query(query))
-			entries = query.fetch(1)
-			if entries:
-				# memcache.set(key, (entries, datetime.datetime.now()))
-				logging.error("stored CACHE for " + key)
-			else:
-				logging.error("MAIN PAGE NOT FOUND")
-		self.render_front("main.html", title=title, content=content, error=error, entries=entries)
+			logging.error("MAIN PAGE NOT FOUND")
+		self.render_front("main.html", title=title, content=content, error=error, entries=entries, cache_age_message=cache_age_message)
 
 	def get(self):
 		self.render_form()
