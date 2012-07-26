@@ -87,17 +87,13 @@ def format_date_for_json(dt):
 
 class ModnicaAccount(MainPageHandler):
 	def render_front(self, template, cache_age_message="Page is not cached", **kw):
-		#logging.info("DEBUG: ====>" + "ModnicaPage.render_front()")
-		#for e in entries:
-		#	debug = db.to_dict(e)
-		#	logging.info("DEBUG: ====>" + str(debug) + " ::: ")
 		message = ""
 		username_cookie      = self.request.cookies.get('user_id', None)
 		#logging.info("==> ModnicaAccount:render_front() cookie=" + str(username_cookie))
 		if username_cookie:
 			username = check_secure_val(username_cookie)
 			if username:
-				logging.info("==> ModnicaAccount:render_front() username=" + username)
+				#logging.info("==> ModnicaAccount:render_front() username=" + username)
 				message="Logged in as %s" % username
 		cookie_message="cookie=%s, empty=%s" % (username_cookie, 
 		                                        str(valid_cookie(username_cookie)))
@@ -105,12 +101,8 @@ class ModnicaAccount(MainPageHandler):
 		self.render(template, message=message, cookie_message=cookie_message, cache_age_message=cache_age_message, **kw)
 
 	def getCurrentUsername(self):
-		#logging.info("DEBUG: ====>" + "WikiPage.render_front()")
-		#for e in entries:
-		#	debug = db.to_dict(e)
-		#	logging.info("DEBUG: ====>" + str(debug) + " ::: ")
 		username_cookie      = self.request.cookies.get('user_id', None)
-		#logging.info("==> WikiAccount:render_front() cookie=" + username_cookie)
+		#logging.info("==> WikiAccount:getCurrentUsername() cookie=" + username_cookie)
 		if username_cookie:
 			username = check_secure_val(username_cookie)
 			if username:
@@ -122,9 +114,9 @@ class ModnicaAccount(MainPageHandler):
 		if not key:
 			logging.error("getDbEntry(): WARNING: no key is provided")
 		else:
-			data = memcache.get(key)[0]
-			entry, saving_time = data[0], data[1]
-			if entry:
+			data = memcache.get(key)
+			if data:
+				entry, saving_time = data[0], data[1]
 				logging.error("used CACHE with key=" + key)
 				diff = datetime.datetime.now() - saving_time
 				cache_age_message = "Queried %s seconds ago" % diff.seconds
@@ -134,6 +126,7 @@ class ModnicaAccount(MainPageHandler):
 			logging.error("getDbEntry(): ERROR: no query is provided, key=" + key)
 			return None, "not cached"
 			
+		logging.error("DB QUERY: " + show_query(query))
 		entries = query.fetch(1)
 		if not entries:
 			logging.error("getDbEntry(): ERROR: query returned no data, key=" + key)
@@ -186,9 +179,11 @@ class ModnicaAccount(MainPageHandler):
 class ModnicaUsers(ModnicaAccount):
 
 	def get(self):
-		logging.error("DB QUERY :: SELECT * FROM User")
-		entries = db.GqlQuery("SELECT * FROM User ORDER BY created DESC LIMIT 100")
-		self.render_front("users.html", entries=entries)
+		key = "users-list"
+		query = User.all()
+		query.order("-created")
+		entries, cache_age_message = self.getDbEntries(key, query)
+		self.render_front("users.html", entries=entries, cache_age_message=cache_age_message)
 
 	def post(self):
 		logging.info("ModnicaUsers:post(): ====>" + str(self.request) + " ::: ")
@@ -211,12 +206,12 @@ class ModnicaUsers(ModnicaAccount):
 class ModnicaArticles(ModnicaAccount):
 
 	def get(self):
+		key = "articles-list"
 		query = Article.all()
 		query.filter("isLatest =", True)
 		query.order("title")
-		logging.error("DB QUERY: " + show_query(query))
-		entries = query.fetch(100)
-		self.render_front("articles.html", entries=entries)
+		entries, cache_age_message = self.getDbEntries(key, query)
+		self.render_front("articles.html", entries=entries, cache_age_message=cache_age_message)
 
 	def post(self):
 		logging.info("ModnicaUsers:post(): ====>" + str(self.request) + " ::: ")
@@ -225,7 +220,11 @@ class ModnicaArticles(ModnicaAccount):
 		articleId  = self.request.get("article-isMain")
 		isMain     = self.request.get("article-isMain")
 
-		articles  = Article.all().filter("isMain", True).fetch(1)
+		key = "article-isMain-" + page_path
+		query = Article.all().filter("isMain", True)
+
+		# clear isMain flag. There should be just one record, but just in case we'll fetch several
+		articles, cache_age_message  = self.getDbEntries(key, query) 
 		if articles:
 			for article in articles:
 				if article.key().id() != articleId:
@@ -246,12 +245,13 @@ class ModnicaArticles(ModnicaAccount):
 class ModnicaArticlesVersions(ModnicaAccount):
 
 	def get(self, pagePath):
+		key = "pagePath-" + pagePath
+		logging.info("ModnicaArticlesVersions:get(): ====> pagePath=" + pagePath + ", key=" + key)
 		query = Article.all()
 		query.filter("pagePath =", pagePath)
 		query.order("-created")
-		logging.error("DB QUERY: " + show_query(query))
-		entries = query.fetch(100)
-		self.render_front("articles_versions.html", entries=entries)
+		entries, cache_age_message = self.getDbEntries(key, query)
+		self.render_front("articles_versions.html", entries=entries, cache_age_message=cache_age_message)
 
 	def post(self, page_path):
 		articleId  = self.request.get("article-isLatest")
@@ -259,7 +259,11 @@ class ModnicaArticlesVersions(ModnicaAccount):
 
 		logging.info("ModnicaArticlesVersions:post(): ====> articleId=" + str(articleId))
 
-		articles  = Article.all().filter("isLatest", True).filter("pagePath =", page_path).fetch(10)
+		key = "article-isLatest-" + page_path
+		query = Article.all().filter("isLatest", True).filter("pagePath =", page_path)
+
+		# clear isLatest flag. There should be just one record, but just in case we'll fetch several
+		articles, cache_age_message  = self.getDbEntries(key, query) 
 		article = None
 		if articles:
 			for article in articles:
@@ -311,26 +315,14 @@ class ModnicaArticlesEdit(ModnicaAccount):
 			self.redirect("/login")
 			return		
 		
-		title    = self.request.get("title")
-		content  = self.request.get("content")
-		pagePath = self.request.get("pagePath")
-		created    = ""
-		key      =  "page-"+page_id+"-"+pagePath
-		logging.error("FIXME: " +title+"/"+content+" >> id=<"+page_id+">, pagePath=<"+pagePath+">, path=<"+page_path+">")
-		if not title or not content:
-			entry, cache_age_message = getFromCacheOrDb(key, pagePath, page_id)
-			if entry:
-				title = entry.title
-				content  = entry.content
-				pagePath = entry.pagePath
-				created    = entry.created
-				createdBy  = entry.createdBy
-				logging.error("prepared for page edit:" + page_id + page_path)
-			else:
-				logging.error("ModnicaArticlesEdit:get(): entry not found: " + page_id + page_path)
-				self.redirect("/articles/post")
-				return
-		self.render_form(page_id, title=title, content=content, pagePath=pagePath, cache_age_message=cache_age_message)
+		key      =  "article-"+page_id
+		query = Article.all().filter("__key__ =", db.Key.from_path('Article', int(page_id)))
+		entry, cache_age_message = self.getDbEntry(key, query)
+		if not entry:
+			logging.error("ModnicaArticlesEdit:get(): entry not found: " + page_id + page_path)
+			self.redirect("/articles/post")
+			return
+		self.render_form(page_id, title=entry.title, content=entry.content, pagePath=entry.pagePath, createdBy=entry.createdBy, cache_age_message=cache_age_message)
 		
 	def post(self, page_id, page_path):
 		username = self.getCurrentUsername()
@@ -373,19 +365,14 @@ class ModnicaArticlesView(ModnicaAccount):
 		username = self.getCurrentUsername()
 		logging.error("ModnicaArticlesView:get(): id=<"+page_id+">, pagePath=<"+pagePath+">, path=<"+page_path+">")
 		
-		key      =  "page-"+page_id+"-"+page_path
-		entry, cache_age_message = getFromCacheOrDb(key, page_path, page_id)
-		if entry:
-			title = entry.title
-			content  = entry.content
-			created    = entry.created
-			createdBy  = entry.createdBy
-			logging.error("prepared for page view:" + page_id + page_path)
-		else:
+		key      =  "article-"+page_id
+		query = Article.all().filter("__key__ =", db.Key.from_path('Article', int(page_id)))
+		entry, cache_age_message = self.getDbEntry(key, query)
+		if not entry:
 			logging.error("ModnicaArticlesView:get(): entry not found: " + page_id + page_path)
 			self.redirect("/articles")
 			return
-		self.render_form(page_id, title=title, content=content, cache_age_message=cache_age_message)
+		self.render_form(page_id, title=entry.title, content=entry.content, cache_age_message=cache_age_message)
 
 #----------------------------------------------
 # [+] UTILS
@@ -416,7 +403,7 @@ def show_query(query):
     filters = query._Query__query_sets[0]
     orderings = query._Query__orderings
 
-    res = ["%s.all()" % kind]
+    res = ["*** %s.all()" % kind]
     if ancestor is not None:
         res.append("ancestor(%r)" % ancestor)
     for k in sorted(filters):
@@ -427,75 +414,6 @@ def show_query(query):
         res.append("order(%r)" % p)
 
     return '.'.join(res)
-#----------------------------------------------
-# [+] CACHE
-#----------------------------------------------
-
-def getFromCacheOrDb(key, page_path, page_id = None, pagePath = None):
-	data = memcache.get(key)
-	cache_age=0
-	entry = None
-
-	if not page_id and not pagePath:
-		logging.error("no data is provided!")
-		return None, "not cached"
-	
-	if data is None:
-		if page_id:
-			logging.error("DB QUERY: get_by_id()")
-			entry = Article.get_by_id(int(page_id))
-		else:
-			query = Article.all()
-			query.filter("pagePath =", pagePath)
-			query.order("-created")
-			logging.error("DB QUERY: " + show_query(query))
-			entries = query.fetch(1)
-			if entries:
-				entry = entries[0]
-		if entry:
-			memcache.set(key, (entry, datetime.datetime.now()))
-			logging.error("stored CACHE for " + key)
-	else:
-		entry, saving_time = data[0], data[1]
-		logging.error("used CACHE with key=" + key)
-		diff = datetime.datetime.now() - saving_time
-		cache_age = diff.seconds
-	cache_age_message = "Queried %s seconds ago" % cache_age
-	return entry, cache_age_message
-
-def getFromCacheOrDbList(key, page_path):
-	data = memcache.get(key)
-	cache_age=0
-	entries = None
-
-	if data is None:
-		query = Article.all()
-		query.filter("page_path =", page_path)
-		query.order("-created")
-		logging.error("DB QUERY: " + show_query(query))
-		entries = query.fetch(20)
-		if entries:
-			memcache.set(key, (entries, datetime.datetime.now()))
-			logging.error("stored CACHE for " + key)
-	else:
-		entries, saving_time = data[0], data[1]
-		logging.error("used CACHE with key=" + key)
-		diff = datetime.datetime.now() - saving_time
-		cache_age = diff.seconds
-	cache_age_message = "Queried %s seconds ago" % cache_age
-	return entries, cache_age_message
-
-def saveRecord(page_path, obj):
-	obj.put()
-	logging.error("DB QUERY: SAVED " + repr(obj))
-	#logging.info("DEBUG: ====>" + str(db.to_dict(a)) + " ::: " + str(a.key().id()))
-	memcache.delete("page-"  + page_path)
-	memcache.delete("page--" + page_path)
-	memcache.delete("page-"  + page_path+"-history")
-	logging.error("cleared CACHE for " + "page-"  + page_path)
-	logging.error("cleared CACHE for " + "page--" + page_path)
-	logging.error("cleared CACHE for " + "page-"  + page_path+"-history")
-
 
 #----------------------------------------------
 # [+] SIGNUP
@@ -683,25 +601,24 @@ class Article(db.Model):
 	content   = db.TextProperty(required = True)
 	pagePath  = db.StringProperty()
 	isMain    = db.BooleanProperty(default = False)
-	isLatest  = db.BooleanProperty(default = False)
+	isLatest  = db.BooleanProperty(default = True)
 	idInMenu  = db.IntegerProperty(default = -1)
 	created   = db.DateTimeProperty(auto_now_add = True)
 	createdBy = db.StringProperty()
 
-def top_articles(update = False):
-	key = 'top'
-	articles = memcache.get(key)
-	if articles is None or update: 
-		logging.error("DB QUERY :: SELECT * FROM Article")
-		articles = db.GqlQuery("SELECT * FROM Article "
-						   "ORDER BY created DESC "
-						   "LIMIT 100")
-		# prevent the runnning of multiple queries
-		articles = list(articles)
-		memcache.set(key, articles)
-	else:
-		logging.error("used CACHE with key=" + key)
-	return articles
+#----------------------------------------------
+# [+] PRODUCT
+#----------------------------------------------
+
+class Product(db.Model):
+	title        = db.StringProperty(required = True)
+	content      = db.TextProperty(required = True)
+	price        = db.IntegerProperty(default = 0)
+	pagePath     = db.StringProperty()
+	isLatest     = db.BooleanProperty(default = True)
+	idOnVitrina  = db.IntegerProperty(default = -1)
+	created      = db.DateTimeProperty(auto_now_add = True)
+	createdBy    = db.StringProperty()
 
 #----------------------------------------------
 # [+] MAIN
@@ -734,6 +651,7 @@ app = webapp2.WSGIApplication(
 	('/articles/post', 					ModnicaArticlesPost),
 	('(/articles/edit/?([0-9]*))', 		ModnicaArticlesEdit),
 	('/articles/versions/' + PAGE_RE, 	ModnicaArticlesVersions),
+	('(/articles/([0-9]+))()',          ModnicaArticlesView),
 	('(/articles/?([0-9]*))/' + PAGE_RE,ModnicaArticlesView),
 	('/signup',   						ModnicaSignup),
 	('/login',         					ModnicaLogin),
