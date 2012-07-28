@@ -1,0 +1,36 @@
+{% extends "cabinet.html" %}
+{% block subtitle %}Продукты{% endblock %}
+{% block subcontent%}
+    <div id="links" class="links">
+		<a href="/products/post">Добавить продукт</a>
+	</div>
+	<hr>
+	
+	<div class="error">{{error}}</div>
+
+	<table>
+	<tr>
+		<th>ID</th>
+		<th>Название</th>
+		<th>Текст</th>
+		<th>Порядковый номер на витрине</th>
+		<th>Путь</th>
+		<th>Действия</th>
+	</tr>
+	<tr>
+	{% for entry in entries %}
+		<td>{{entry.key().id()}}</td>
+		<td>{{entry.title}}</td>
+		<td>{{entry.created}}</td>
+		<td>{{entry.idOnVitrina}}</td>
+		<td>{{entry.pagePath}}</td>
+		<td>
+			<a href="/products/{{entry.key().id()}}">View</a>
+			<a href="/products/edit/{{entry.key().id()}}">Edit</a>
+			<a href="/products/versions/{{entry.pagePath}}">Versions</a>
+		</td>
+	</tr>
+	{% endfor %}
+	</table>
+{% endblock %}
+

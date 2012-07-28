@@ -85,15 +85,15 @@ def format_date_for_json(dt):
 # [+] ACCOUNT
 #----------------------------------------------
 
-class ModnicaAccount(MainPageHandler):
+class Account(MainPageHandler):
 	def render_front(self, template, cache_age_message="Page is not cached", **kw):
 		message = ""
 		username_cookie      = self.request.cookies.get('user_id', None)
-		#logging.info("==> ModnicaAccount:render_front() cookie=" + str(username_cookie))
+		#logging.info("==> Account:render_front() cookie=" + str(username_cookie))
 		if username_cookie:
 			username = check_secure_val(username_cookie)
 			if username:
-				#logging.info("==> ModnicaAccount:render_front() username=" + username)
+				#logging.info("==> Account:render_front() username=" + username)
 				message="Logged in as %s" % username
 		cookie_message="cookie=%s, empty=%s" % (username_cookie, 
 		                                        str(valid_cookie(username_cookie)))
@@ -119,14 +119,14 @@ class ModnicaAccount(MainPageHandler):
 				entry, saving_time = data[0], data[1]
 				logging.error("used CACHE with key=" + key)
 				diff = datetime.datetime.now() - saving_time
-				cache_age_message = "Queried %s seconds ago" % diff.seconds
+				cache_age_message = "Queried %s seconds ago by key=<%s>" % (diff.seconds, key)
 				return entry, cache_age_message
 		
 		if not query:
 			logging.error("getDbEntry(): ERROR: no query is provided, key=" + key)
 			return None, "not cached"
 			
-		logging.error("DB QUERY: " + show_query(query))
+		logging.error("====> DB QUERY: " + show_query(query))
 		entries = query.fetch(1)
 		if not entries:
 			logging.error("getDbEntry(): ERROR: query returned no data, key=" + key)
@@ -147,36 +147,39 @@ class ModnicaAccount(MainPageHandler):
 				entries, saving_time = data[0], data[1]
 				logging.error("used CACHE with key=" + key)
 				diff = datetime.datetime.now() - saving_time
-				cache_age_message = "Queried %s seconds ago" % diff.seconds
+				cache_age_message = "Queried %s seconds ago by key=<%s>" % (diff.seconds, key)
 				return entries, cache_age_message
 		
 		if not query:
 			logging.error("getDbEntries(): ERROR: no query is provided, key=" + key)
 			return None, "not cached"
 			
-		logging.error("DB QUERY: " + show_query(query))
+		logging.error("====> DB QUERY: " + show_query(query))
 		entries = query.fetch(noOfEntries)
 		if not entries:
 			logging.error("getDbEntries(): ERROR: query returned no data, key=" + key)
-			return None, "not cached"
 			
 		memcache.set(key, (entries, datetime.datetime.now()))
 		logging.error("stored CACHE for " + key)
 		return entries, "not cached"
 
-	def saveObj(obj, keyList = {}):
+	def saveObj(self, obj, keyList = {}):
 		obj.put()
-		logging.error("DB QUERY: SAVED " + repr(obj))
+		logging.error("#### DB QUERY: SAVED " + repr(obj))
 		#logging.info("DEBUG: ====>" + str(db.to_dict(a)) + " ::: " + str(a.key().id()))
 		for key in keyList:
 			memcache.delete(key)
 			logging.error("cleared CACHE for " + key)
 
+	def clearCache(self, key):
+		memcache.delete(key)
+		logging.error("cleared CACHE for " + key)
+
 #----------------------------------------------
 # [+] USERS
 #----------------------------------------------
 
-class ModnicaUsers(ModnicaAccount):
+class ModnicaUsers(Account):
 
 	def get(self):
 		key = "users-list"
@@ -195,7 +198,6 @@ class ModnicaUsers(ModnicaAccount):
 			user.isAdmin = bool(isAdmin)
 			logging.info("DEBUG: ====> isAdmin=" + isAdmin)
 			user.put()
-			memcache.flush_all()
 
 		self.redirect("/users")
 
@@ -203,7 +205,7 @@ class ModnicaUsers(ModnicaAccount):
 # [+] ARTICLES
 #----------------------------------------------
 
-class ModnicaArticles(ModnicaAccount):
+class ModnicaArticles(Account):
 
 	def get(self):
 		key = "articles-list"
@@ -237,12 +239,11 @@ class ModnicaArticles(ModnicaAccount):
 			if article:
 				article.isMain = bool(isMain)
 				logging.info("DEBUG: ====> setting isMain=" + str(isMain) + " for " + str(articleId))
-				article.put()
-		memcache.flush_all()
+				self.saveObj(article, {"articles-list"})
 
 		self.redirect("/articles")
 
-class ModnicaArticlesVersions(ModnicaAccount):
+class ModnicaArticlesVersions(Account):
 
 	def get(self, pagePath):
 		key = "pagePath-" + pagePath
@@ -285,7 +286,7 @@ class ModnicaArticlesVersions(ModnicaAccount):
 
 		self.redirect("/articles")
 
-class ModnicaArticlesPost(ModnicaAccount):
+class ModnicaArticlesPost(Account):
 	def render_form(self, title="", content="", error="", **kw):
 		self.render_front("post_article.html", title=title, content=content, error=error, **kw)
 
@@ -305,7 +306,7 @@ class ModnicaArticlesPost(ModnicaAccount):
 			error = "we need both title and content!"
 			self.render_form(title, content, error)
 
-class ModnicaArticlesEdit(ModnicaAccount):
+class ModnicaArticlesEdit(Account):
 	def render_form(self, page_id, title="", content="", error="", **kw):
 		self.render_front("edit_article.html", title=title, content=content, error=error, **kw)
 
@@ -357,7 +358,7 @@ class ModnicaArticlesEdit(ModnicaAccount):
 		self.redirect("/articles/" + pagePath)
 		memcache.flush_all()
 
-class ModnicaArticlesView(ModnicaAccount):
+class ModnicaArticlesView(Account):
 	def render_form(self, page_id, title="", content="", error="", **kw):
 		self.render_front("view_article.html", title=title, content=content, error=error, **kw)
 
@@ -371,6 +372,222 @@ class ModnicaArticlesView(ModnicaAccount):
 		if not entry:
 			logging.error("ModnicaArticlesView:get(): entry not found: " + page_id + page_path)
 			self.redirect("/articles")
+			return
+		self.render_form(page_id, title=entry.title, content=entry.content, cache_age_message=cache_age_message)
+
+#----------------------------------------------
+# [+] VITRINA
+#----------------------------------------------
+
+class ModnicaVitrina(Account):
+
+	def get(self):
+		key = "vitrina"
+		query = Product.all()
+		query.filter("isLatest =", True)
+		query.filter("idOnVitrina !=", -1)
+		query.order("idOnVitrina")
+		entries, cache_age_message = self.getDbEntries(key, query)
+		if entries:
+			self.render_front("vitrina.html", entries=entries, cache_age_message=cache_age_message)
+		else:
+			self.redirect("/")
+			
+
+#----------------------------------------------
+# [+] PRODUCTS
+#----------------------------------------------
+
+class ModnicaProducts(Account):
+
+	def get(self):
+		key = "products-list"
+		query = Product.all()
+		query.filter("isLatest =", True)
+		query.order("title")
+		entries, cache_age_message = self.getDbEntries(key, query)
+		if entries:
+			self.render_front("products.html", entries=entries, cache_age_message=cache_age_message)
+		else:
+			self.redirect("/products/post")
+			
+
+class ModnicaProductsVersions(Account):
+
+	def get(self, pagePath):
+		key = "pagePath-" + pagePath
+		logging.info("ModnicaProductsVersions:get(): ====> pagePath=" + pagePath + ", key=" + key)
+		query = Product.all()
+		query.filter("pagePath =", pagePath)
+		query.order("-created")
+		entries, cache_age_message = self.getDbEntries(key, query)
+		self.render_front("products_versions.html", entries=entries, cache_age_message=cache_age_message)
+
+	def post(self, page_path):
+		productId  = self.request.get("product-isLatest")
+		isLatest   = self.request.get("product-isLatest")
+
+		logging.info("ModnicaProductsVersions:post(): ====> productId=" + str(productId))
+
+		key = "product-isLatest-" + page_path
+		query = Product.all().filter("isLatest", True).filter("pagePath =", page_path)
+
+		# clear isLatest flag. There should be just one record, but just in case we'll fetch several
+		products, cache_age_message  = self.getDbEntries(key, query) 
+		product = None
+		if products:
+			for product in products:
+				if product.key().id() != productId:
+					product.isLatest = False
+					logging.info("DEBUG: ====> clearing isLatest for " + str(product.key().id()))
+					product.put()
+				else:
+					logging.info("no need to update isLatest for "+page_path+" : " + str(product.key().id()))
+					self.redirect("/products")
+					return
+
+		product    = Product.get_by_id(int(productId))
+		if product:
+			product.isLatest = bool(isLatest)
+			logging.info("DEBUG: ====> setting isLatest=" + str(isLatest) + " for " + str(productId))
+			product.put()
+		memcache.flush_all()
+
+		self.redirect("/products")
+
+class ModnicaProductsPost(Account):
+	def render_form(self, title="", content="", error="", **kw):
+		self.render_front("post_product.html", title=title, content=content, error=error, **kw)
+
+	def get(self):
+		self.render_form()
+		
+	def post(self):
+		title = self.request.get("title")
+		content   = self.request.get("content")
+		pagePath = self.request.get("pagePath")
+		error = None
+
+		if not title:
+			error = "Title is mandatory"
+		if not content:
+			error = "The product is empty"
+		if not pagePath:
+			error = "The path is empty"
+		if error:
+			self.render_form(title=title, content=content, pagePath=pagePath, error=error)
+			return
+		a = Product(title=title,content=content, pagePath=pagePath, isLatest=True)
+		self.saveObj(a, {"product-"+pagePath, "products-list"})
+		self.redirect("/products/" + pagePath)
+
+class ModnicaProductsEdit(Account):
+	def render_form(self, page_id, title="", content="", error="", **kw):
+		self.render_front("edit_product.html", title=title, content=content, error=error, **kw)
+
+	def get(self, page_path, page_id):
+		username = self.getCurrentUsername()
+		if not username:
+			self.redirect("/login")
+			return		
+		
+		key      =  "product-"+page_id
+		query = Product.all().filter("__key__ =", db.Key.from_path('Product', int(page_id)))
+		entry, cache_age_message = self.getDbEntry(key, query)
+		if not entry:
+			logging.error("ModnicaProductsEdit:get(): entry not found: " + page_id + page_path)
+			self.redirect("/products/post")
+			return
+		self.render_form(page_id, title=entry.title, content=entry.content, pagePath=entry.pagePath, createdBy=entry.createdBy, idOnVitrina=entry.idOnVitrina, cache_age_message=cache_age_message)
+		
+	def post(self, page_id, page_path):
+		username = self.getCurrentUsername()
+		error = None
+		if not username:
+			self.redirect("/login")
+			return
+		title = self.request.get("title")
+		content  = self.request.get("content")
+		pagePath = self.request.get("pagePath")
+		idOnVitrina = int(self.request.get("idOnVitrina"))
+		isShownOnVitrina = self.request.get("isShownOnVitrina")
+		logging.error("===========+> idOnVitrina=" + str(idOnVitrina) +" isShownOnVitrina= " + str(isShownOnVitrina))
+		if not title:
+			error = "Title is mandatory"
+		if not content:
+			error = "The product is empty"
+		if not pagePath:
+			error = "The path is empty"
+		if error:
+			self.render_front("form.html", title=title, body=body, pagePath=pagePath)
+			return
+		self.clearCache("product-idOnVitrina")
+		isNewOnVitrina = False
+		if not isShownOnVitrina:
+			idOnVitrina = -1
+		else:
+			if idOnVitrina == -1:
+				isNewOnVitrina = True
+				logging.error("===========+> isNewOnVitrina= True")
+		# clear latest flag
+		query = Product.all()
+		query.filter("pagePath =", pagePath)
+		query.filter("isLatest =", True)
+		entries, cache_age_message = self.getDbEntries("product-"+pagePath, query)
+		for e in entries:
+			logging.error("===========+> CLEARING IS_LATEST for " + pagePath + ", id=" + str(e.key().id()))
+			e.isLatest = False
+			logging.error("e=<"+str(e)+">")
+			self.saveObj(e, {"product-"+str(e.key().id()), "products-list"})
+		# get max idOnVitrina
+		if isNewOnVitrina == True:
+			idOnVitrina = 0
+			query = Product.all()
+			query.filter("idOnVitrina !=", -1)
+			query.filter("isLatest =", True)
+			entries, cache_age_message = self.getDbEntries("product-idOnVitrina", query)
+			for e in entries:
+				idOnVitrina = idOnVitrina + 1
+		a = Product(title=title, content=content, createdBy=username, pagePath=pagePath, idOnVitrina=idOnVitrina, isLatest=True)
+		if isNewOnVitrina == True:
+			self.saveObj(a, {"product-"+pagePath, "products-list", "vitrina"})
+		else:
+			self.saveObj(a, {"product-"+pagePath, "products-list"})
+		self.clearCache("product-"+str(a.key().id()))
+		self.redirect("/products/" + str(a.key().id()))
+
+
+class ModnicaProductsView(Account):
+	def render_form(self, page_id, title="", content="", error="", **kw):
+		self.render_front("view_product.html", title=title, content=content, error=error, **kw)
+
+	def get(self, page_path, page_id, pagePath):
+		username = self.getCurrentUsername()
+		logging.error("ModnicaProductsView:get(): id=<"+page_id+">, pagePath=<"+pagePath+">, path=<"+page_path+">")
+		
+		key      =  "product-"+page_id
+		query = Product.all().filter("__key__ =", db.Key.from_path('Product', int(page_id)))
+		entry, cache_age_message = self.getDbEntry(key, query)
+		if not entry:
+			logging.error("ModnicaProductsView:get(): entry not found: " + page_id + page_path)
+			self.redirect("/products")
+			return
+		self.render_form(page_id, title=entry.title, content=entry.content, cache_age_message=cache_age_message)
+
+class ModnicaProductsViewByPath(Account):
+	def render_form(self, page_id, title="", content="", error="", **kw):
+		self.render_front("view_product.html", title=title, content=content, error=error, **kw)
+
+	def get(self, page_path, pagePath):
+		username = self.getCurrentUsername()
+		logging.error("ModnicaProductsView:get(): id=<"+page_id+">, pagePath=<"+pagePath+">, path=<"+page_path+">")
+		
+		key      =  "product-"+pagePath
+		query = Product.all().filter("pagePath", pagePath). filter("isLatest =", True)
+		entry, cache_age_message = self.getDbEntry(key, query)
+		if not entry:
+			logging.error("ModnicaProductsView:get(): entry not found: " + page_path + "; " + page_path)
+			self.redirect("/products")
 			return
 		self.render_form(page_id, title=entry.title, content=entry.content, cache_age_message=cache_age_message)
 
@@ -614,7 +831,7 @@ class Product(db.Model):
 	title        = db.StringProperty(required = True)
 	content      = db.TextProperty(required = True)
 	price        = db.IntegerProperty(default = 0)
-	pagePath     = db.StringProperty()
+	pagePath     = db.StringProperty(required = True)
 	isLatest     = db.BooleanProperty(default = True)
 	idOnVitrina  = db.IntegerProperty(default = -1)
 	created      = db.DateTimeProperty(auto_now_add = True)
@@ -624,7 +841,7 @@ class Product(db.Model):
 # [+] MAIN
 #----------------------------------------------
 
-class MainPage(ModnicaAccount):
+class MainPage(Account):
 	def render_form(self, title="", content="", error=""):
 		query = Article.all()
 		query.filter("isMain =", True)
@@ -647,12 +864,22 @@ app = webapp2.WSGIApplication(
    [
 	('/', 	            				MainPage),
 	('/users',    						ModnicaUsers),
+	('/vitrina',    					ModnicaVitrina),
+
 	('/articles', 						ModnicaArticles),
 	('/articles/post', 					ModnicaArticlesPost),
 	('(/articles/edit/?([0-9]*))', 		ModnicaArticlesEdit),
 	('/articles/versions/' + PAGE_RE, 	ModnicaArticlesVersions),
 	('(/articles/([0-9]+))()',          ModnicaArticlesView),
 	('(/articles/?([0-9]*))/' + PAGE_RE,ModnicaArticlesView),
+
+	('/products', 						ModnicaProducts),
+	('/products/post', 					ModnicaProductsPost),
+	('(/products/edit/?([0-9]*))', 		ModnicaProductsEdit),
+	('/products/versions/' + PAGE_RE, 	ModnicaProductsVersions),
+	('(/products/([0-9]+))()',          ModnicaProductsView),
+	('(/products/' + PAGE_RE,           ModnicaProductsViewByPath),
+
 	('/signup',   						ModnicaSignup),
 	('/login',         					ModnicaLogin),
 	('/logout',         				ModnicaLogout)

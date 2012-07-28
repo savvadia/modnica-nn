@@ -1,14 +1,14 @@
 {% extends "cabinet.html" %}
-{% block subtitle %}Написать новую статью{% endblock %}
+{% block subtitle %}Добавить продукт{% endblock %}
 {% block subcontent%}
 	<form method="post">
 		<label>
-			<div>Title</div>
+			<div>Заголовок</div>
 			<input type="text" name="title" value="{{title}}">
 		</label>
 		
 		<label>
-			<div>Article</div>
+			<div>Описание</div>
 			<textarea name="content">{{content}}</textarea>
 		</label>
 

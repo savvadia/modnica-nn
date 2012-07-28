@@ -1,0 +1,41 @@
+{% extends "cabinet.html" %}
+{% block subtitle %}Продукты :: версии{% endblock %}
+{% block subcontent%}
+	<div class="error">{{error}}</div>
+
+	<form method="post">
+	<table>
+	<tr>
+		<th>ID</th>
+		<th>Название</th>
+		<th>Текст</th>
+		<th>Путь</th>
+		<th>Является отображаемой версией</th>
+		<th>Действия</th>
+	</tr>
+	<tr>
+	{% for entry in entries %}
+		<td>{{entry.key().id()}}</td>
+		<td>{{entry.title}}</td>
+		<td>{{entry.created}}</td>
+		<td>{{entry.pagePath}}</td>
+		<td>
+		<label>
+			{% if  entry.isLatest: %}
+			<input type="radio" name="product-isLatest" value="{{entry.key().id()}}" checked="checked">
+			{% else: %}
+			<input type="radio" name="product-isLatest" value="{{entry.key().id()}}">
+			{% endif %}
+		</label>
+		</td>
+		<td>
+			<a href="/products/{{entry.key().id()}}">View</a>
+			<a href="/products/edit/{{entry.key().id()}}">Edit</a>
+		</td>
+	</tr>
+	{% endfor %}
+	</table>
+	<input type="submit" value="Сохранить">
+	</form>
+{% endblock %}
+

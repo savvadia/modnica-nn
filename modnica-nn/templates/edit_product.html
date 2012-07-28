@@ -1,0 +1,37 @@
+{% extends "cabinet.html" %}
+{% block subtitle %}Редактировать продукт{% endblock %}
+{% block subcontent%}
+	<form method="post">
+		<label>
+			<div>Title</div>
+			<input type="text" name="title" value="{{title}}">
+		</label>
+		
+		<label>
+			<div>Article</div>
+			<textarea name="content">{{content}}</textarea>
+		</label>
+		
+		<label>
+			<input type="text" name="idOnVitrina" value="{{idOnVitrina}}">
+		</label>
+		
+		<label>
+			<div>Путь</div>
+			<input type="text" name="pagePath" value="{{pagePath}}">
+		</label>
+		
+		<label>
+			<div>Показывать на витрине</div>
+			{% if  idOnVitrina != -1: %}
+			<input type="checkbox" name="isShownOnVitrina" value="isShownOnVitrina" checked="checked">
+			{% else: %}
+			<input type="checkbox" name="isShownOnVitrina" value="isShownOnVitrina">
+			{% endif %}
+		</label>
+		
+		<div class="error">{{error}}</div>
+		<input type="submit" value="Сохранить">
+	</form>
+{% endblock %}
+

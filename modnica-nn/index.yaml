@@ -38,3 +38,19 @@ indexes:
   - name: page_path
   - name: created
     direction: desc
+
+- kind: Product
+  properties:
+  - name: isLatest
+  - name: idOnVitrina
+
+- kind: Product
+  properties:
+  - name: isLatest
+  - name: title
+
+- kind: Product
+  properties:
+  - name: pagePath
+  - name: created
+    direction: desc
