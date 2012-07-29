@@ -69,12 +69,42 @@ table, th , tr, td {
 }
 
 .account {
+	width: 100%;
+	text-align: right;
+	float: left;
 	font-size: 10px;
 	font-weight: bold;
-	float: right;
 	background-color: #ec9bca;
 	color: #9F1558;
 	padding: 3px;
+}
+
+
+.menu {
+	width: 100%;
+	font-size: 20px;
+	font-weight: bold;
+	background-color: #9F1558;
+	color: #000000;
+	padding-left: 3px;
+	padding-right: 3px;
+	padding-top:30px;
+	padding-bottom:4px;
+}
+
+.menu a:link, a:visited
+{
+	font-weight:bold;
+	color:#FFFFFF;
+	background-color:#9F1558;
+	width:120px;
+	text-align:center;
+	padding:4px;
+	text-decoration:none;
+}
+.menu a:hover, a:active
+{
+	background-color:#ec9bca;
 }
 
 .map {

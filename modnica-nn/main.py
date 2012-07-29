@@ -92,16 +92,18 @@ class Account(MainPageHandler):
 	def render_front(self, template, cache_age_message="Page is not cached", **kw):
 		message = ""
 		username_cookie      = self.request.cookies.get('user_id', None)
+		user = None
 		#logging.info("==> Account:render_front() cookie=" + str(username_cookie))
 		if username_cookie:
 			username = check_secure_val(username_cookie)
 			if username:
 				#logging.info("==> Account:render_front() username=" + username)
-				message="Logged in as %s" % username
+				query = User.all().filter("username =", username)
+				user, ignored_cache_age_message = self.getDbEntry("username"+username, query)
 		cookie_message="cookie=%s, empty=%s" % (username_cookie, 
 		                                        str(valid_cookie(username_cookie)))
 
-		self.render(template, message=message, cookie_message=cookie_message, cache_age_message=cache_age_message, **kw)
+		self.render(template, user=user, cookie_message=cookie_message, cache_age_message=cache_age_message, **kw)
 
 	def getCurrentUsername(self):
 		username_cookie      = self.request.cookies.get('user_id', None)
