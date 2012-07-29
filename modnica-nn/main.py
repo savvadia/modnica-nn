@@ -10,10 +10,13 @@ import random
 import string
 import json
 import datetime
+import time 
 
 from xml.dom import minidom
+from google.appengine.api import users 
 from google.appengine.api import memcache
 from google.appengine.ext import db
+from django.utils import simplejson  
 
 template_dir =  os.path.join(os.path.dirname(__file__), 'templates')
 jinja_env = jinja2.Environment(loader = jinja2.FileSystemLoader(template_dir),
@@ -154,16 +157,15 @@ class Account(MainPageHandler):
 			diff = datetime.datetime.now() - saving_time
 			cache_age_message = "Queried %s seconds ago by key=<%s>" % (diff.seconds, key)
 			return entry, cache_age_message
-			
-		query = "SELECT * FROM " + objectName + " WHERE __key__ = KEY('" + objectName + "', '" + str(objectId) + "')"
+		query = "SELECT * FROM " + objectName + " WHERE __key__ = KEY('" + objectName + "', " + str(objectId) + ")"
 		logging.error("====> DB QUERY: by ID:" + query)
 		query = db.GqlQuery(query)
-		entry = query.fetch(1)
-		if not entry:
+		entries = query.fetch(1)
+		if not entries:
 			logging.error("getDbEntryById(): ERROR: query returned no data, key=" + key)
 			return None, "not cached"
 #		logging.error("stored FIXME::: ========> got " + str(entry) + "; " + repr(entry) + + "; key="+ key)
-		
+		entry = entries[0]
 		memcache.set(key, (entry, datetime.datetime.now()))
 		logging.error("stored CACHE for " + key)
 		return entry, "not cached"
@@ -196,7 +198,8 @@ class Account(MainPageHandler):
 
 	def saveObj(self, obj, keyList = {}):
 		obj.put()
-		logging.error("#### DB QUERY: SAVED " + repr(obj))
+		logging.error("#### DB QUERY: SAVED ID=" + str(obj.key().id())+ " " + obj.to_str())
+				
 		#logging.info("DEBUG: ====>" + str(db.to_dict(a)) + " ::: " + str(a.key().id()))
 		for key in keyList:
 			memcache.delete(key)
@@ -217,7 +220,8 @@ class Account(MainPageHandler):
 		idOnVitrina = -1
 		for e in entries:
 			if e.idOnVitrina > idOnVitrina:
-				idOnVitrina = e.idOnVitrina + 1
+				idOnVitrina = e.idOnVitrina
+		logging.info("getMaxIdOnVitrina returns idOnVitrina=" + str(idOnVitrina))
 		return idOnVitrina
 
 	def getPrevEntryOnVitrina(self, idOnVitrina):
@@ -233,14 +237,26 @@ class Account(MainPageHandler):
 		if not entries:
 			logging.error("getPrevEntryOnVitrina(): no entries on vitrina")
 			return None
-		prevEntry = None
+		foundEntry = None
 		for e in entries:
-			if prevEntry is None or (e.idOnVitrina > prevEntry.idOnVitrina and e.idOnVitrina < idOnVitrina):
-				prevEntry = e
-		if not prevEntry:
-			logging.error("getPrevEntryOnVitrina(): prev entry not found for idOnVitrina" + str(idOnVitrina))
+			logging.error("getPrevEntryOnVitrina(): FIXME CHECKING ID=" + str(e.key().id())+ "." + str(e.idOnVitrina) + " < " + str(idOnVitrina))
+			if foundEntry is None:
+				if e.idOnVitrina == idOnVitrina:
+					continue
+				elif e.idOnVitrina < idOnVitrina:
+					foundEntry = e
+					logging.error("getPrevEntryOnVitrina(): FIXME FOUND ID=" + str(foundEntry.key().id())+ " as prev entry for idOnVitrina=" + str(idOnVitrina))
+			# min ... found < desired < given ... max
+			elif foundEntry.idOnVitrina < e.idOnVitrina and e.idOnVitrina < idOnVitrina:
+				foundEntry = e
+				logging.error("getPrevEntryOnVitrina(): FIXME FOUND ID=" + str(foundEntry.key().id())+ " as prev entry for idOnVitrina=" + str(idOnVitrina))
+			else:
+				logging.error("getPrevEntryOnVitrina(): FIXME IGNORES ID=" + str(foundEntry.key().id())+ "." + str(foundEntry.idOnVitrina) + " < " + str(e.key().id())+ "." + str(e.idOnVitrina) + " < " + str(idOnVitrina))
+		if not foundEntry:
+			logging.error("getPrevEntryOnVitrina(): prev entry not found for idOnVitrina=" + str(idOnVitrina))
 			return None
-		return prevEntry
+		logging.error("getPrevEntryOnVitrina(): FIXME FOUND FINAL ID=" + str(foundEntry.key().id())+ " as prev entry for idOnVitrina=" + str(idOnVitrina))
+		return foundEntry
 
 	def getNextEntryOnVitrina(self, idOnVitrina):
 		if idOnVitrina == -1:
@@ -255,14 +271,27 @@ class Account(MainPageHandler):
 		if not entries:
 			logging.error("getNextEntryOnVitrina(): no entries on vitrina")
 			return None
-		prevEntry = None
+		foundEntry = None
 		for e in entries:
-			if prevEntry is None or (e.idOnVitrina < prevEntry.idOnVitrina and e.idOnVitrina > idOnVitrina):
-				prevEntry = e
-		if not prevEntry:
-			logging.error("getNextEntryOnVitrina(): prev entry not found for idOnVitrina" + str(idOnVitrina))
+			logging.error("getNextEntryOnVitrina(): FIXME CHECKING ID=" + str(idOnVitrina) + " < " + str(e.key().id())+ "." + str(e.idOnVitrina))
+			if foundEntry is None:
+				if e.idOnVitrina == idOnVitrina:
+					continue
+				elif idOnVitrina < e.idOnVitrina:
+					foundEntry = e
+					logging.error("getNextEntryOnVitrina(): FIXME FOUND ID=" + str(foundEntry.key().id())+ " as next entry for idOnVitrina=" + str(idOnVitrina))
+			# min ... given < desired < found ... max
+			elif idOnVitrina < e.idOnVitrina and e.idOnVitrina < foundEntry.idOnVitrina:
+				foundEntry = e
+				logging.error("getNextEntryOnVitrina(): FIXME FOUND ID=" + str(foundEntry.key().id())+ " as next entry for idOnVitrina=" + str(idOnVitrina))
+			else:
+				logging.error("getNextEntryOnVitrina(): FIXME IGNORES ID=" + str(idOnVitrina) + " < " + str(e.key().id())+ "." + str(e.idOnVitrina) + " < " + str(foundEntry.key().id())+ "." + str(foundEntry.idOnVitrina))
+		if not foundEntry:
+			logging.error("getNextEntryOnVitrina(): next entry not found for idOnVitrina=" + str(idOnVitrina))
 			return None
-		return prevEntry
+		
+		logging.error("getNextEntryOnVitrina(): FIXME FOUND FINAL ID=" + str(foundEntry.key().id())+ " as next entry for idOnVitrina=" + str(idOnVitrina))
+		return foundEntry
 
 
 #----------------------------------------------
@@ -513,52 +542,56 @@ class ModnicaVitrinaEdit(Account):
 		moveRight  = self.request.get("moveRight")
 
 		if moveIn:
-			idOnVitrina = self.getMaxIdOnVitrina()
-			a, cache_age_message = self.getDbEntryById("Product", productId)
-			if not a:
-				logging.info("ModnicaVitrinaEdit:post(): ====> product not found id=" + productId)
-				self.redirect("/edit/vitrina")
+			idOnVitrina = 1+ self.getMaxIdOnVitrina()
+			logging.info("ModnicaVitrinaEdit:post() moveIn: ====> maxIdOnVitrina=" + str(idOnVitrina))
+			entry, cache_age_message = self.getDbEntryById("Product", productId)
+			if not entry:
+				logging.info("ModnicaVitrinaEdit:post() moveIn: ====> product not found id=" + str(productId))
+				self.redirect("/vitrina/edit")
 				return
-			a.idOnVitrina=idOnVitrina
-			self.saveObj(a, {"product-"+productId, "vitrina", "vitrina-other"})
-			self.redirect("/edit/vitrina")
+			entry.idOnVitrina=idOnVitrina
+			self.saveObj(entry, {"product-"+str(productId), "Product"+str(productId), "vitrina", "vitrina-other"})
+			self.redirect("/vitrina/edit")
 			return
 		
 		if moveOut:
 			entry, cache_age_message = self.getDbEntryById("Product", productId)
 			if not entry:
 				logging.info("ModnicaVitrinaEdit:post(): ====> product not found for id=" + str(productId))
-				self.redirect("/edit/vitrina")
+				self.redirect("/vitrina/edit")
 				return
-			e.idOnVitrina=-1
-			self.saveObj(a, {"product-"+productId, "vitrina", "vitrina-other"})
-			self.redirect("/edit/vitrina")
+			entry.idOnVitrina=-1
+			self.saveObj(entry, {"product-"+str(productId), "Product"+str(productId), "vitrina", "vitrina-other"})
+			self.redirect("/vitrina/edit")
 			return
 			
 		if moveLeft or moveRight:
 			entry, cache_age_message = self.getDbEntryById("Product", productId)
 			if not entry:
 				logging.info("ModnicaVitrinaEdit:post(): ====> product not found for id=" + str(productId))
-				self.redirect("/edit/vitrina")
+				self.redirect("/vitrina/edit")
 				return
 			if moveLeft:
-				entryOther = self.getPrevEntryOnVitrina(entry.idOnVitrina)
+				foundEntry = self.getPrevEntryOnVitrina(entry.idOnVitrina)
 			else:
-				entryOther = self.getNextEntryOnVitrina(entry.idOnVitrina)
-			if not entry:
+				foundEntry = self.getNextEntryOnVitrina(entry.idOnVitrina)
+			if not foundEntry:
 				if moveLeft:
 					logging.info("ModnicaVitrinaEdit:post(): ====> prev entry not found for idOnVitrina=" + str(entry.idOnVitrina))
 				else:
 					logging.info("ModnicaVitrinaEdit:post(): ====> next entry not found for idOnVitrina=" + str(entry.idOnVitrina))
-				self.redirect("/edit/vitrina")
+				self.redirect("/vitrina/edit")
 				return
-			adjIdOnVitrina = entryOther.idOnVitrina
-			# swap
-			entryOther.idOnVitrina = entry.idOnVitrina
-			entry.idOnVitrina = adjIdOnVitrina
-			self.saveObj(entry,      {"product-"+productId, "vitrina"})
-			self.saveObj(entryOther, {"product-"+entryOther.key().id(), "vitrina"})
-			self.redirect("/edit/vitrina")
+			if entry.key().id() == foundEntry.key().id():
+				logging.info("ModnicaVitrinaEdit:post(): ====> got the same object id="+ str(foundEntry.key().id()) + " for idOnVitrina=" + str(entry.idOnVitrina))
+			else:
+				adjIdOnVitrina = foundEntry.idOnVitrina
+				# swap
+				foundEntry.idOnVitrina = entry.idOnVitrina
+				entry.idOnVitrina = adjIdOnVitrina
+				self.saveObj(entry,      {"product-" + str(productId), "Product" + str(productId), "vitrina"})
+				self.saveObj(foundEntry, {"product-" + str(foundEntry.key().id()), "Product" + str(foundEntry.key().id()), "vitrina"})
+			self.redirect("/vitrina/edit")
 			return
 
 #----------------------------------------------
@@ -632,6 +665,7 @@ class ModnicaProductsPost(Account):
 	def post(self):
 		title = self.request.get("title")
 		content   = self.request.get("content")
+		price   = int(self.request.get("content"))
 		pagePath = self.request.get("pagePath")
 		error = None
 
@@ -644,9 +678,19 @@ class ModnicaProductsPost(Account):
 		if error:
 			self.render_form(title=title, content=content, pagePath=pagePath, error=error)
 			return
-		a = Product(title=title,content=content, pagePath=pagePath, isLatest=True)
-		self.saveObj(a, {"product-"+pagePath, "products-list"})
-		self.redirect("/products/" + pagePath)
+		# clear latest flag
+		query = Product.all()
+		query.filter("pagePath =", pagePath)
+		query.filter("isLatest =", True)
+		entries, cache_age_message = self.getDbEntries("product-"+pagePath, query)
+		for e in entries:
+			logging.error("===========+> CLEARING IS_LATEST for " + pagePath + ", id=" + str(e.key().id()))
+			e.isLatest = False
+			logging.error("e=<"+str(e)+">")
+			self.saveObj(e, {"product-"+str(e.key().id()), "products-list"})
+		a = Product(title=title,content=content, price=price, pagePath=pagePath, isLatest=True)
+		self.saveObj(a, {"product-"+pagePath, "products-list", "vitrina-other"})
+		self.redirect("/products")
 
 class ModnicaProductsEdit(Account):
 	def render_form(self, page_id, title="", content="", error="", **kw):
@@ -665,7 +709,7 @@ class ModnicaProductsEdit(Account):
 			logging.error("ModnicaProductsEdit:get(): entry not found: " + page_id + page_path)
 			self.redirect("/products/post")
 			return
-		self.render_form(page_id, title=entry.title, content=entry.content, pagePath=entry.pagePath, createdBy=entry.createdBy, idOnVitrina=entry.idOnVitrina, cache_age_message=cache_age_message)
+		self.render_form(page_id, title=entry.title, content=entry.content, price=entry.price, pagePath=entry.pagePath, createdBy=entry.createdBy, idOnVitrina=entry.idOnVitrina, cache_age_message=cache_age_message)
 		
 	def post(self, page_id, page_path):
 		username = self.getCurrentUsername()
@@ -675,6 +719,7 @@ class ModnicaProductsEdit(Account):
 			return
 		title = self.request.get("title")
 		content  = self.request.get("content")
+		price  = int(self.request.get("price"))
 		pagePath = self.request.get("pagePath")
 		idOnVitrina = int(self.request.get("idOnVitrina"))
 		isShownOnVitrina = self.request.get("isShownOnVitrina")
@@ -708,8 +753,8 @@ class ModnicaProductsEdit(Account):
 			self.saveObj(e, {"product-"+str(e.key().id()), "products-list"})
 		# get max idOnVitrina
 		if isNewOnVitrina == True:
-			idOnVitrina = self.getMaxIdOnVitrina()
-		a = Product(title=title, content=content, createdBy=username, pagePath=pagePath, idOnVitrina=idOnVitrina, isLatest=True)
+			idOnVitrina = 1 + self.getMaxIdOnVitrina()
+		a = Product(title=title, content=content, createdBy=username, pagePath=pagePath, price=price, idOnVitrina=idOnVitrina, isLatest=True)
 		if isNewOnVitrina == True:
 			self.saveObj(a, {"product-"+pagePath, "products-list", "vitrina"})
 		else:
@@ -736,12 +781,12 @@ class ModnicaProductsView(Account):
 		self.render_form(page_id, title=entry.title, content=entry.content, cache_age_message=cache_age_message)
 
 class ModnicaProductsViewByPath(Account):
-	def render_form(self, page_id, title="", content="", error="", **kw):
+	def render_form(self, title="", content="", error="", **kw):
 		self.render_front("view_product.html", title=title, content=content, error=error, **kw)
 
 	def get(self, page_path, pagePath):
 		username = self.getCurrentUsername()
-		logging.error("ModnicaProductsView:get(): id=<"+page_id+">, pagePath=<"+pagePath+">, path=<"+page_path+">")
+		logging.error("ModnicaProductsView:get(): pagePath=<"+pagePath+">, path=<"+page_path+">")
 		
 		key      =  "product-"+pagePath
 		query = Product.all().filter("pagePath", pagePath). filter("isLatest =", True)
@@ -750,7 +795,7 @@ class ModnicaProductsViewByPath(Account):
 			logging.error("ModnicaProductsView:get(): entry not found: " + page_path + "; " + page_path)
 			self.redirect("/products")
 			return
-		self.render_form(page_id, title=entry.title, content=entry.content, cache_age_message=cache_age_message)
+		self.render_form(title=entry.title, content=entry.content, cache_age_message=cache_age_message)
 
 #----------------------------------------------
 # [+] UTILS
@@ -960,21 +1005,85 @@ def gmaps_img(points):
     return GMAPS_URL + '&'.join('markers=%s,%s' % (p.lat, p.lon) for p in points)
 
 #----------------------------------------------
+# [+] BASE MODEL
+#----------------------------------------------
+
+class GqlEncoder(simplejson.JSONEncoder): 
+
+    """Extends JSONEncoder to add support for GQL results and properties. 
+
+    Adds support to simplejson JSONEncoders for GQL results and properties by 
+    overriding JSONEncoder's default method. 
+    """ 
+
+    # TODO Improve coverage for all of App Engine's Property types. 
+
+    def default(self, obj):
+        """Tests the input object, obj, to encode as JSON.""" 
+        if hasattr(obj, '__json__'): 
+            return getattr(obj, '__json__')() 
+        if isinstance(obj, db.GqlQuery): 
+            return list(obj) 
+        elif isinstance(obj, db.Model): 
+            properties = obj.properties().items() 
+            output = {} 
+            for field, value in properties: 
+                output[field] = getattr(obj, field)
+            return output 
+        elif isinstance(obj, datetime.datetime): 
+            output = {} 
+            fields = ['day', 'hour', 'microsecond', 'minute', 'month', 'second', 'year'] 
+            fields = [] 
+            methods = ['ctime', 'isocalendar', 'isoformat', 'isoweekday', 'timetuple'] 
+            methods = ['ctime'] 
+            for field in fields: 
+                output[field] = getattr(obj, field) 
+            for method in methods: 
+                output[method] = getattr(obj, method)() 
+            output['epoch'] = time.mktime(obj.timetuple()) 
+            return output
+        elif isinstance(obj, datetime.date): 
+            output = {} 
+            fields = ['year', 'month', 'day'] 
+            fields = [] 
+            methods = ['ctime', 'isocalendar', 'isoformat', 'isoweekday', 'timetuple'] 
+            methods = ['ctime'] 
+            for field in fields: 
+                output[field] = getattr(obj, field) 
+            for method in methods: 
+                output[method] = getattr(obj, method)() 
+            output['epoch'] = time.mktime(obj.timetuple()) 
+            return output 
+        elif isinstance(obj, time.struct_time): 
+            return list(obj) 
+        elif isinstance(obj, users.User): 
+            output = {} 
+            methods = ['nickname', 'email', 'auth_domain'] 
+            for method in methods: 
+                output[method] = getattr(obj, method)() 
+            return output 
+        return simplejson.JSONEncoder.default(self, obj) 
+        
+class BaseModel(db.Model):
+	def to_str(self):
+		return GqlEncoder().encode(self)
+ 
+#----------------------------------------------
 # [+] USER
 #----------------------------------------------
 
-class User(db.Model):
+class User(BaseModel):
 	username       = db.StringProperty(required = True)
 	email          = db.TextProperty()
 	password_hash  = db.TextProperty(required = True)
 	created        = db.DateTimeProperty(auto_now_add = True)
 	isAdmin        = db.BooleanProperty(default = False)
-
+        
 #----------------------------------------------
 # [+] ARTICLE
 #----------------------------------------------
 
-class Article(db.Model):
+class Article(BaseModel):
 	title     = db.StringProperty(required = True)
 	content   = db.TextProperty(required = True)
 	pagePath  = db.StringProperty()
@@ -988,7 +1097,7 @@ class Article(db.Model):
 # [+] PRODUCT
 #----------------------------------------------
 
-class Product(db.Model):
+class Product(BaseModel):
 	title        = db.StringProperty(required = True)
 	content      = db.TextProperty(required = True)
 	price        = db.IntegerProperty(default = 0)
@@ -1040,7 +1149,7 @@ app = webapp2.WSGIApplication(
 	('(/products/edit/?([0-9]*))', 		ModnicaProductsEdit),
 	('/products/versions/' + PAGE_RE, 	ModnicaProductsVersions),
 	('(/products/([0-9]+))()',          ModnicaProductsView),
-	('(/products/' + PAGE_RE,           ModnicaProductsViewByPath),
+	('(/products/' + PAGE_RE + ")",     ModnicaProductsViewByPath),
 
 	('/signup',   						ModnicaSignup),
 	('/login',         					ModnicaLogin),

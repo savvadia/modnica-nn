@@ -4,17 +4,18 @@
 	<table>
 	<tr>
 	{% for entry in entries %}
-		{% if not loop.first and loop.index0 % 3 == 2 %}
+		{% if not loop.first and loop.index0 % 3 == 0 %}
 		</tr><tr>
 		{% endif %}
 		<td>
 			<form method="post">
-			<input type="hidden" name="product-id" value="{{entry.key().id()}}">
-			<input type="hidden" name="idOnVitrina" value="{{entry.idOnVitrina}}">
+			<input type="disabled" name="product-id" value="{{entry.key().id()}}">
+			<input type="disabled" name="idOnVitrina" value="{{entry.idOnVitrina}}">
 			<br>
 			{{entry.title}}<br>
 			от {{entry.price}} руб.<br>
-			<a href="/products/{{entry.key().id()}}">View</a><br>
+			<a href="/products/{{entry.key().id()}}">View</a>
+			<a href="/products/edit/{{entry.key().id()}}">Edit</a><br>
 			{% if not loop.first %}
 			<input type="submit" name="moveLeft" value="<= Подвинуть">
 			{% endif %}
@@ -45,15 +46,15 @@
 		<th>Цена от</th>
 		<th>Действия</th>
 	</tr>
+	{% for entry in entriesNotOnVitrina %}
 	<tr>
 	<form method="post">
-		{% for entry in entriesNotOnVitrina %}
 			<td><input type="hidden" name="product-id" value="{{entry.key().id()}}">{{entry.key().id()}}</td>
 			<td>{{entry.title}}</td>
 			<td>от {{entry.price}} руб.</td>
-			<td><a href="/products/{{entry.key().id()}}">View</a><input type="submit" name="moveIn" value="Добавить на витрину"></td>
-		{% endfor %}
+			<td><a href="/products/{{entry.key().id()}}">View</a> <input type="submit" name="moveIn" value="Добавить на витрину"> {{entry.idOnVitrina}}</td>
 	</form>
 	</tr>
+	{% endfor %}
 	</table>
 {% endblock %}

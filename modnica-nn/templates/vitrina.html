@@ -6,7 +6,7 @@
 	<table>
 	<tr>
 	{% for entry in entries %}
-		{% if not loop.first and loop.index0 % 3 == 2 %}
+		{% if not loop.first and loop.index0 % 3 == 0 %}
 		</tr><tr>
 		{% endif %}
 		<td>
