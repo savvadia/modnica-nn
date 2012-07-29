@@ -1,0 +1,59 @@
+{% extends "cabinet.html" %}
+{% block subtitle %}Редактировать витрину{% endblock %}
+{% block subcontent%}
+	<table>
+	<tr>
+	{% for entry in entries %}
+		{% if not loop.first and loop.index0 % 3 == 2 %}
+		</tr><tr>
+		{% endif %}
+		<td>
+			<form method="post">
+			<input type="hidden" name="product-id" value="{{entry.key().id()}}">
+			<input type="hidden" name="idOnVitrina" value="{{entry.idOnVitrina}}">
+			<br>
+			{{entry.title}}<br>
+			от {{entry.price}} руб.<br>
+			<a href="/products/{{entry.key().id()}}">View</a><br>
+			{% if not loop.first %}
+			<input type="submit" name="moveLeft" value="<= Подвинуть">
+			{% endif %}
+			{% if not loop.last %}
+			<input type="submit" name="moveRight" value="Подвинуть =>">
+			{% endif %}
+			<input type="submit" name="moveOut" value="Убрать с витрины">
+			<div class="error">{{error}}</div>
+			</form>
+		</td>
+		{% if loop.last and loop.index0 % 3 < 1 %}
+		<td>-</td>
+		{% endif %}
+		{% if loop.last and loop.index0 % 3 < 2 %}
+		<td>-</td>
+		{% endif %}
+	{% endfor %}
+	</tr>
+	</table>
+
+	<hr>
+	Эти продукты пока не отображаются на витрине:
+	<div class="error">{{error}}</div>
+	<table>
+	<tr>
+		<th>ID</th>
+		<th>Название</th>
+		<th>Цена от</th>
+		<th>Действия</th>
+	</tr>
+	<tr>
+	<form method="post">
+		{% for entry in entriesNotOnVitrina %}
+			<td><input type="hidden" name="product-id" value="{{entry.key().id()}}">{{entry.key().id()}}</td>
+			<td>{{entry.title}}</td>
+			<td>от {{entry.price}} руб.</td>
+			<td><a href="/products/{{entry.key().id()}}">View</a><input type="submit" name="moveIn" value="Добавить на витрину"></td>
+		{% endfor %}
+	</form>
+	</tr>
+	</table>
+{% endblock %}

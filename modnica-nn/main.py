@@ -137,6 +137,37 @@ class Account(MainPageHandler):
 		logging.error("stored CACHE for " + key)
 		return entry, "not cached"
 		
+	# returns one entry by its ID and text message about cache age
+	def getDbEntryById(self, objectName, objectId = -1):
+		if not objectName:
+			logging.error("getDbEntryById(): ERROR: objectName is not provided")
+			return None, "not cached"
+		if not objectId or objectId == -1:
+			logging.error("getDbEntryById(): ERROR: objectId is not provided: " + str(objectId))
+			return None, "not cached"
+		
+		key = objectName + str(objectId)
+		data = memcache.get(key)
+		if data:
+			entry, saving_time = data[0], data[1]
+			logging.error("used CACHE with key=" + key)
+			diff = datetime.datetime.now() - saving_time
+			cache_age_message = "Queried %s seconds ago by key=<%s>" % (diff.seconds, key)
+			return entry, cache_age_message
+			
+		query = "SELECT * FROM " + objectName + " WHERE __key__ = KEY('" + objectName + "', '" + str(objectId) + "')"
+		logging.error("====> DB QUERY: by ID:" + query)
+		query = db.GqlQuery(query)
+		entry = query.fetch(1)
+		if not entry:
+			logging.error("getDbEntryById(): ERROR: query returned no data, key=" + key)
+			return None, "not cached"
+#		logging.error("stored FIXME::: ========> got " + str(entry) + "; " + repr(entry) + + "; key="+ key)
+		
+		memcache.set(key, (entry, datetime.datetime.now()))
+		logging.error("stored CACHE for " + key)
+		return entry, "not cached"
+		
 	# returns one entry and text message about cache age
 	def getDbEntries(self, key, query, noOfEntries = 100):
 		if not key:
@@ -174,6 +205,65 @@ class Account(MainPageHandler):
 	def clearCache(self, key):
 		memcache.delete(key)
 		logging.error("cleared CACHE for " + key)
+		
+	def getMaxIdOnVitrina(self):
+		query = Product.all()
+		query.filter("idOnVitrina !=", -1)
+		query.filter("isLatest =", True)
+		query.order("idOnVitrina")
+		entries, cache_age_message = self.getDbEntries("vitrina", query)
+		if not entries:
+				return -1
+		idOnVitrina = -1
+		for e in entries:
+			if e.idOnVitrina > idOnVitrina:
+				idOnVitrina = e.idOnVitrina + 1
+		return idOnVitrina
+
+	def getPrevEntryOnVitrina(self, idOnVitrina):
+		if idOnVitrina == -1:
+			logging.error("getPrevEntryOnVitrina(): idOnVitrina = -1")
+			return None
+			
+		query = Product.all()
+		query.filter("idOnVitrina !=", -1)
+		query.filter("isLatest =", True)
+		query.order("idOnVitrina")
+		entries, cache_age_message = self.getDbEntries("vitrina", query)
+		if not entries:
+			logging.error("getPrevEntryOnVitrina(): no entries on vitrina")
+			return None
+		prevEntry = None
+		for e in entries:
+			if prevEntry is None or (e.idOnVitrina > prevEntry.idOnVitrina and e.idOnVitrina < idOnVitrina):
+				prevEntry = e
+		if not prevEntry:
+			logging.error("getPrevEntryOnVitrina(): prev entry not found for idOnVitrina" + str(idOnVitrina))
+			return None
+		return prevEntry
+
+	def getNextEntryOnVitrina(self, idOnVitrina):
+		if idOnVitrina == -1:
+			logging.error("getNextEntryOnVitrina(): idOnVitrina = -1")
+			return None
+			
+		query = Product.all()
+		query.filter("idOnVitrina !=", -1)
+		query.filter("isLatest =", True)
+		query.order("idOnVitrina")
+		entries, cache_age_message = self.getDbEntries("vitrina", query)
+		if not entries:
+			logging.error("getNextEntryOnVitrina(): no entries on vitrina")
+			return None
+		prevEntry = None
+		for e in entries:
+			if prevEntry is None or (e.idOnVitrina < prevEntry.idOnVitrina and e.idOnVitrina > idOnVitrina):
+				prevEntry = e
+		if not prevEntry:
+			logging.error("getNextEntryOnVitrina(): prev entry not found for idOnVitrina" + str(idOnVitrina))
+			return None
+		return prevEntry
+
 
 #----------------------------------------------
 # [+] USERS
@@ -392,7 +482,84 @@ class ModnicaVitrina(Account):
 			self.render_front("vitrina.html", entries=entries, cache_age_message=cache_age_message)
 		else:
 			self.redirect("/")
+
+class ModnicaVitrinaEdit(Account):
+
+	def get(self):
+		key = "vitrina"
+		query = Product.all()
+		query.filter("isLatest =", True)
+		query.filter("idOnVitrina !=", -1)
+		query.order("idOnVitrina")
+		entries, cache_age_message = self.getDbEntries(key, query)
+
+		key = "vitrina-other"
+		query = Product.all()
+		query.filter("isLatest =", True)
+		query.filter("idOnVitrina ==", -1)
+		query.order("-created")
+		entriesNotOnVitrina, cache_age_message = self.getDbEntries(key, query)
+		
+		if entries or entriesNotOnVitrina:
+			self.render_front("edit_vitrina.html", entries=entries, entriesNotOnVitrina=entriesNotOnVitrina, cache_age_message=cache_age_message)
+		else:
+			self.redirect("/")
+
+	def post(self):
+		productId  = int(self.request.get("product-id"))
+		moveIn     = self.request.get("moveIn")
+		moveOut    = self.request.get("moveOut")
+		moveLeft   = self.request.get("moveLeft")
+		moveRight  = self.request.get("moveRight")
+
+		if moveIn:
+			idOnVitrina = self.getMaxIdOnVitrina()
+			a, cache_age_message = self.getDbEntryById("Product", productId)
+			if not a:
+				logging.info("ModnicaVitrinaEdit:post(): ====> product not found id=" + productId)
+				self.redirect("/edit/vitrina")
+				return
+			a.idOnVitrina=idOnVitrina
+			self.saveObj(a, {"product-"+productId, "vitrina", "vitrina-other"})
+			self.redirect("/edit/vitrina")
+			return
+		
+		if moveOut:
+			entry, cache_age_message = self.getDbEntryById("Product", productId)
+			if not entry:
+				logging.info("ModnicaVitrinaEdit:post(): ====> product not found for id=" + str(productId))
+				self.redirect("/edit/vitrina")
+				return
+			e.idOnVitrina=-1
+			self.saveObj(a, {"product-"+productId, "vitrina", "vitrina-other"})
+			self.redirect("/edit/vitrina")
+			return
 			
+		if moveLeft or moveRight:
+			entry, cache_age_message = self.getDbEntryById("Product", productId)
+			if not entry:
+				logging.info("ModnicaVitrinaEdit:post(): ====> product not found for id=" + str(productId))
+				self.redirect("/edit/vitrina")
+				return
+			if moveLeft:
+				entryOther = self.getPrevEntryOnVitrina(entry.idOnVitrina)
+			else:
+				entryOther = self.getNextEntryOnVitrina(entry.idOnVitrina)
+			if not entry:
+				if moveLeft:
+					logging.info("ModnicaVitrinaEdit:post(): ====> prev entry not found for idOnVitrina=" + str(entry.idOnVitrina))
+				else:
+					logging.info("ModnicaVitrinaEdit:post(): ====> next entry not found for idOnVitrina=" + str(entry.idOnVitrina))
+				self.redirect("/edit/vitrina")
+				return
+			adjIdOnVitrina = entryOther.idOnVitrina
+			# swap
+			entryOther.idOnVitrina = entry.idOnVitrina
+			entry.idOnVitrina = adjIdOnVitrina
+			self.saveObj(entry,      {"product-"+productId, "vitrina"})
+			self.saveObj(entryOther, {"product-"+entryOther.key().id(), "vitrina"})
+			self.redirect("/edit/vitrina")
+			return
 
 #----------------------------------------------
 # [+] PRODUCTS
@@ -521,7 +688,7 @@ class ModnicaProductsEdit(Account):
 		if error:
 			self.render_front("form.html", title=title, body=body, pagePath=pagePath)
 			return
-		self.clearCache("product-idOnVitrina")
+		self.clearCache("vitrina")
 		isNewOnVitrina = False
 		if not isShownOnVitrina:
 			idOnVitrina = -1
@@ -541,13 +708,7 @@ class ModnicaProductsEdit(Account):
 			self.saveObj(e, {"product-"+str(e.key().id()), "products-list"})
 		# get max idOnVitrina
 		if isNewOnVitrina == True:
-			idOnVitrina = 0
-			query = Product.all()
-			query.filter("idOnVitrina !=", -1)
-			query.filter("isLatest =", True)
-			entries, cache_age_message = self.getDbEntries("product-idOnVitrina", query)
-			for e in entries:
-				idOnVitrina = idOnVitrina + 1
+			idOnVitrina = self.getMaxIdOnVitrina()
 		a = Product(title=title, content=content, createdBy=username, pagePath=pagePath, idOnVitrina=idOnVitrina, isLatest=True)
 		if isNewOnVitrina == True:
 			self.saveObj(a, {"product-"+pagePath, "products-list", "vitrina"})
@@ -865,6 +1026,7 @@ app = webapp2.WSGIApplication(
 	('/', 	            				MainPage),
 	('/users',    						ModnicaUsers),
 	('/vitrina',    					ModnicaVitrina),
+	('/vitrina/edit', 					ModnicaVitrinaEdit),
 
 	('/articles', 						ModnicaArticles),
 	('/articles/post', 					ModnicaArticlesPost),

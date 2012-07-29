@@ -41,6 +41,13 @@ indexes:
 
 - kind: Product
   properties:
+  - name: idOnVitrina
+  - name: isLatest
+  - name: created
+    direction: desc
+
+- kind: Product
+  properties:
   - name: isLatest
   - name: idOnVitrina
 
