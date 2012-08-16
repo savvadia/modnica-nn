@@ -11,11 +11,17 @@ import string
 import json
 import datetime
 import time 
+import os
+import urllib
 
 from xml.dom import minidom
 from google.appengine.api import users 
 from google.appengine.api import memcache
 from google.appengine.ext import db
+from google.appengine.ext import blobstore
+from google.appengine.ext.webapp import blobstore_handlers
+from google.appengine.ext.webapp.util import run_wsgi_app
+
 from django.utils import simplejson  
 
 template_dir =  os.path.join(os.path.dirname(__file__), 'templates')
@@ -89,7 +95,7 @@ def format_date_for_json(dt):
 #----------------------------------------------
 
 class Account(MainPageHandler):
-	def render_front(self, template, cache_age_message="Page is not cached", **kw):
+	def render_front(self, template, cache_age_message="Page is not cached", activeMenuItem="undef", **kw):
 		message = ""
 		username_cookie      = self.request.cookies.get('user_id', None)
 		user = None
@@ -103,7 +109,10 @@ class Account(MainPageHandler):
 		cookie_message="cookie=%s, empty=%s" % (username_cookie, 
 		                                        str(valid_cookie(username_cookie)))
 
-		self.render(template, user=user, cookie_message=cookie_message, cache_age_message=cache_age_message, **kw)
+		self.render(template, user=user,
+		                      cookie_message=cookie_message,
+		                      cache_age_message=cache_age_message,
+		                      activeMenuItem=activeMenuItem, **kw)
 
 	def getCurrentUsername(self):
 		username_cookie      = self.request.cookies.get('user_id', None)
@@ -295,12 +304,23 @@ class Account(MainPageHandler):
 		logging.error("getNextEntryOnVitrina(): FIXME FOUND FINAL ID=" + str(foundEntry.key().id())+ " as next entry for idOnVitrina=" + str(idOnVitrina))
 		return foundEntry
 
+class AccountMain(Account):
+	def render_front(self, template, **kw):
+		super(AccountMain, self).render_front(template=template, activeMenuItem="main", **kw)
+
+class AccountCabinet(Account):
+	def render_front(self, template, **kw):
+		super(AccountCabinet, self).render_front(template=template, activeMenuItem="cabinet", **kw)
+
+class AccountVitrina(Account):
+	def render_front(self, template, **kw):
+		super(AccountVitrina, self).render_front(template=template, activeMenuItem="vitrina", **kw)
 
 #----------------------------------------------
 # [+] USERS
 #----------------------------------------------
 
-class ModnicaUsers(Account):
+class ModnicaUsers(AccountCabinet):
 
 	def get(self):
 		key = "users-list"
@@ -326,7 +346,7 @@ class ModnicaUsers(Account):
 # [+] ARTICLES
 #----------------------------------------------
 
-class ModnicaArticles(Account):
+class ModnicaArticles(AccountCabinet):
 
 	def get(self):
 		key = "articles-list"
@@ -343,7 +363,7 @@ class ModnicaArticles(Account):
 		articleId  = self.request.get("article-isMain")
 		isMain     = self.request.get("article-isMain")
 
-		key = "article-isMain-" + page_path
+		key = "article-isMain"
 		query = Article.all().filter("isMain", True)
 
 		# clear isMain flag. There should be just one record, but just in case we'll fetch several
@@ -354,17 +374,18 @@ class ModnicaArticles(Account):
 					article.isMain = False
 					logging.info("DEBUG: ====> clearing isMain for " + str(article.key().id()))
 					article.put()
+				else:
+					self.redirect("/articles")
 		
-		if (not article) or (article.key().id() != articleId):
-			article    = Article.get_by_id(int(articleId))
-			if article:
-				article.isMain = bool(isMain)
-				logging.info("DEBUG: ====> setting isMain=" + str(isMain) + " for " + str(articleId))
-				self.saveObj(article, {"articles-list"})
+		article    = Article.get_by_id(int(articleId))
+		if article:
+			article.isMain = bool(isMain)
+			logging.info("DEBUG: ====> setting isMain=" + str(isMain) + " for " + str(articleId))
+			self.saveObj(article, {"articles-list"})
 
 		self.redirect("/articles")
 
-class ModnicaArticlesVersions(Account):
+class ModnicaArticlesVersions(AccountCabinet):
 
 	def get(self, pagePath):
 		key = "pagePath-" + pagePath
@@ -407,7 +428,7 @@ class ModnicaArticlesVersions(Account):
 
 		self.redirect("/articles")
 
-class ModnicaArticlesPost(Account):
+class ModnicaArticlesPost(AccountCabinet):
 	def render_form(self, title="", content="", error="", **kw):
 		self.render_front("post_article.html", title=title, content=content, error=error, **kw)
 
@@ -427,7 +448,7 @@ class ModnicaArticlesPost(Account):
 			error = "we need both title and content!"
 			self.render_form(title, content, error)
 
-class ModnicaArticlesEdit(Account):
+class ModnicaArticlesEdit(AccountCabinet):
 	def render_form(self, page_id, title="", content="", error="", **kw):
 		self.render_front("edit_article.html", title=title, content=content, error=error, **kw)
 
@@ -500,7 +521,7 @@ class ModnicaArticlesView(Account):
 # [+] VITRINA
 #----------------------------------------------
 
-class ModnicaVitrina(Account):
+class ModnicaVitrina(AccountVitrina):
 
 	def get(self):
 		key = "vitrina"
@@ -514,7 +535,7 @@ class ModnicaVitrina(Account):
 		else:
 			self.redirect("/")
 
-class ModnicaVitrinaEdit(Account):
+class ModnicaVitrinaEdit(AccountCabinet):
 
 	def get(self):
 		key = "vitrina"
@@ -534,7 +555,7 @@ class ModnicaVitrinaEdit(Account):
 		if entries or entriesNotOnVitrina:
 			self.render_front("edit_vitrina.html", entries=entries, entriesNotOnVitrina=entriesNotOnVitrina, cache_age_message=cache_age_message)
 		else:
-			self.redirect("/")
+			self.render_front("empty_vitrina.html", cache_age_message=cache_age_message)
 
 	def post(self):
 		productId  = int(self.request.get("product-id"))
@@ -614,7 +635,7 @@ class ModnicaProducts(Account):
 			self.redirect("/products/post")
 			
 
-class ModnicaProductsVersions(Account):
+class ModnicaProductsVersions(AccountCabinet):
 
 	def get(self, pagePath):
 		key = "pagePath-" + pagePath
@@ -657,7 +678,7 @@ class ModnicaProductsVersions(Account):
 
 		self.redirect("/products")
 
-class ModnicaProductsPost(Account):
+class ModnicaProductsPost(AccountCabinet):
 	def render_form(self, title="", content="", error="", **kw):
 		self.render_front("post_product.html", title=title, content=content, error=error, **kw)
 
@@ -665,10 +686,10 @@ class ModnicaProductsPost(Account):
 		self.render_form()
 		
 	def post(self):
-		title = self.request.get("title")
+		title     = self.request.get("title")
 		content   = self.request.get("content")
-		price   = int(self.request.get("content"))
-		pagePath = self.request.get("pagePath")
+		price     = self.request.get("price")
+		pagePath  = self.request.get("pagePath")
 		error = None
 
 		if not title:
@@ -677,6 +698,13 @@ class ModnicaProductsPost(Account):
 			error = "The product is empty"
 		if not pagePath:
 			error = "The path is empty"
+		if not price:
+			error = "The price is empty"
+		else:
+			try:
+				price = int(price)
+			except TypeError:
+				error = "The price should be a number"
 		if error:
 			self.render_form(title=title, content=content, pagePath=pagePath, error=error)
 			return
@@ -694,7 +722,7 @@ class ModnicaProductsPost(Account):
 		self.saveObj(a, {"product-"+pagePath, "products-list", "vitrina-other"})
 		self.redirect("/products")
 
-class ModnicaProductsEdit(Account):
+class ModnicaProductsEdit(AccountCabinet):
 	def render_form(self, page_id, title="", content="", error="", **kw):
 		self.render_front("edit_product.html", title=title, content=content, error=error, **kw)
 
@@ -799,6 +827,56 @@ class ModnicaProductsViewByPath(Account):
 			return
 		self.render_form(title=entry.title, content=entry.content, cache_age_message=cache_age_message)
 
+
+#----------------------------------------------
+# [+] PHOTOS
+#----------------------------------------------
+
+class ModnicaPhotosPost(AccountCabinet, blobstore_handlers.BlobstoreUploadHandler):
+	def render_form(self, upload_url="", title="", content="", error="", **kw):
+		self.render_front("post_photo.html", upload_url=upload_url, title=title, content=content, error=error, **kw)
+
+	def get(self):
+		logging.info("ModnicaPhotosPost:get()")
+		upload_url = blobstore.create_upload_url('/photos/post')
+		self.render_form(upload_url=upload_url)
+		
+	def post(self):
+		title     = self.request.get("title")
+		content   = self.request.get("content")
+		error = None
+
+		logging.info("ModnicaPhotosPost:post()")
+		try:
+			upload = self.get_uploads()[0]
+			blob_key=upload.key()
+			username=self.getCurrentUsername()
+			if not title:
+				error = "Title is mandatory"
+			if error:
+				blobstore.delete(blob_key)
+				self.render_form(title=title, content=content, error=error)
+				return
+
+			photo = Photo(title="123", content="", createdBy=username, blob_key=blob_key)
+			db.put(photo)
+			self.redirect('/photos/%s' % upload.key())
+		except:
+			logging.info("ModnicaPhotosPost:post() EXCEPTION")
+		#	error="Uploading failed"
+		#	self.render_form(title=title, content=content, error=error)
+
+class ModnicaPhotosView(AccountCabinet, blobstore_handlers.BlobstoreDownloadHandler):
+	def render_form(self, upload_url="", title="", content="", error="", **kw):
+		self.render_front("post_photo.html", upload_url=upload_url, title=title, content=content, error=error, **kw)
+
+	def get(self, photo_key):
+		logging.info("ModnicaPhotosView:get()")
+		if not blobstore.get(photo_key):
+			self.error(404)
+		else:
+			self.send_blob(photo_key)
+
 #----------------------------------------------
 # [+] UTILS
 #----------------------------------------------
@@ -843,7 +921,7 @@ def show_query(query):
 #----------------------------------------------
 # [+] SIGNUP
 #----------------------------------------------
-class ModnicaSignup(MainPageHandler):
+class ModnicaSignup(Account):
 
   def valid_username(self, username):
   	if not username:
@@ -913,7 +991,16 @@ class ModnicaSignup(MainPageHandler):
 		                  verify_check, email_check)
 	else:
 		password_hash=make_password_hash(username, password)
-		a = User(username=username, email=email, password_hash=password_hash)
+		query = User.all()
+		query.filter("isAdmin =", True)
+		entries, cache_age_message = self.getDbEntries("admins", query)
+		
+		if len(entries) > 0:
+			isAdmin = False
+		else:
+			isAdmin = True
+
+		a = User(username=username, email=email, password_hash=password_hash, isAdmin=isAdmin)
 		a.put()
 		self.response.headers.add_header('Set-Cookie', 'user_id=%s; Path=/' % make_secure_val(username))
 		logging.info("==> ModnicaSignup:post() OK: set cookie to " + make_secure_val(username))
@@ -924,7 +1011,7 @@ class ModnicaSignup(MainPageHandler):
 # [+] LOGIN
 #----------------------------------------------
 
-class ModnicaLogin(MainPageHandler):
+class ModnicaLogin(Account):
 
   def valid_username(self, username):
   	if not username:
@@ -992,7 +1079,7 @@ class ModnicaLogin(MainPageHandler):
 # [+] LOGOUT
 #----------------------------------------------
 
-class ModnicaLogout(MainPageHandler):
+class ModnicaLogout(Account):
   def get(self):
 	self.response.headers.add_header('Set-Cookie', 'user_id=; Path=/')
 	self.redirect("/login")
@@ -1110,10 +1197,21 @@ class Product(BaseModel):
 	createdBy    = db.StringProperty()
 
 #----------------------------------------------
+# [+] PHOTO
+#----------------------------------------------
+
+class Photo(BaseModel):
+	title        = db.StringProperty(required = True)
+	content      = db.StringProperty()
+	blob_key     = blobstore.BlobReferenceProperty()
+	created      = db.DateTimeProperty(auto_now_add = True)
+	createdBy    = db.StringProperty()
+
+#----------------------------------------------
 # [+] MAIN
 #----------------------------------------------
 
-class MainPage(Account):
+class MainPage(AccountMain):
 	def render_form(self, title="", content="", error=""):
 		query = Article.all()
 		query.filter("isMain =", True)
@@ -1152,6 +1250,10 @@ app = webapp2.WSGIApplication(
 	('/products/versions/' + PAGE_RE, 	ModnicaProductsVersions),
 	('(/products/([0-9]+))()',          ModnicaProductsView),
 	('(/products/' + PAGE_RE + ")",     ModnicaProductsViewByPath),
+
+	('/photos/post', 					ModnicaPhotosPost),
+	('/photos/post', 					ModnicaPhotosPost),
+	('/photos/([^/]+)?', 		    	ModnicaPhotosView),
 
 	('/signup',   						ModnicaSignup),
 	('/login',         					ModnicaLogin),

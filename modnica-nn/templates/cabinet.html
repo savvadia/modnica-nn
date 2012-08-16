@@ -1,13 +1,14 @@
 {% extends "base.html" %}
 {% block title %}Кабинет: {% block subtitle %}Subtitle undefined{% endblock %}{% endblock %}
 {% block content%}
-    <div id="links" class="links">
+    <div id="links">
 		<a href="/users">Пользователи</a>
 		<a href="/articles">Статьи</a>
 		<a href="/products">Продукты</a>
 		<a href="/vitrina/edit">Витрина</a>
+		<a href="/photos/post">Фото</a>
 	</div>
 	<hr>
-    <div id="content" class="content">{% block subcontent %}Undefined subcontent{% endblock %}</div>
+    <div id="content">{% block subcontent %}Undefined subcontent{% endblock %}</div>
 {% endblock %}
 

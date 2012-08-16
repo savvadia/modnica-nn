@@ -16,6 +16,9 @@ handlers:
 - url: /(.*css)
   static_files: stylesheets/\1
   upload: stylesheets/(.*)
+- url: /imgs/(.*)
+  static_files: imgs/\1
+  upload: imgs/(.*)
 - url: /.*  
   script: main.py
 
