@@ -4,6 +4,7 @@
 
 	{{photo.content}}
 	<hr>
+	<img src="{{get_serving_url(photo.blob_key, 250)}}" /><br>
 	<h3>File information</h3>
 	<table>
 		<tr><th>Filename</th><td>{{photo.blob_key.filename}}</td></tr>

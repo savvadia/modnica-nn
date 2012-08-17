@@ -16,6 +16,7 @@ import urllib
 
 from xml.dom import minidom
 from google.appengine.api import users 
+from google.appengine.api import images 
 from google.appengine.api import memcache
 from google.appengine.ext import db
 from google.appengine.ext import blobstore
@@ -27,6 +28,8 @@ from django.utils import simplejson
 template_dir =  os.path.join(os.path.dirname(__file__), 'templates')
 jinja_env = jinja2.Environment(loader = jinja2.FileSystemLoader(template_dir),
                                autoescape=True)
+
+jinja_env.globals['get_serving_url'] = images.get_serving_url
 
 #----------------------------------------------
 # [+] HANDLER
@@ -851,21 +854,21 @@ class ModnicaPhotosPost(AccountCabinet, blobstore_handlers.BlobstoreUploadHandle
 		error = None
 
 		logging.info("ModnicaPhotosPost:post()")
-		try:
-			blob_info = self.get_uploads()[0]
-			username=self.getCurrentUsername()
-			if not title:
-				error = "Title is mandatory"
-			if error:
-				blob_info.delete()
-				self.render_form(title=title, content=content, error=error)
-				return
+		#try:
+		blob_info = self.get_uploads()[0]
+		username=self.getCurrentUsername()
+		if not title:
+			error = "Title is mandatory"
+		if error:
+			blob_info.delete()
+			self.render_form(title=title, content=content, error=error)
+			return
 
-			photo = Photo(title="123", content="", createdBy=username, blob_key=blob_info.key())
-			db.put(photo)
-			self.redirect('/photos/%d' % photo.key().id())
-		except:
-			logging.info("ModnicaPhotosPost:post() EXCEPTION")
+		photo = Photo(title="123", content="", createdBy=username, blob_key=blob_info.key())
+		self.saveObj(photo, {"gallery"})
+		self.redirect('/photos/%d' % photo.key().id())
+		#except:
+		logging.info("ModnicaPhotosPost:post() EXCEPTION")
 		#	error="Uploading failed"
 		#	self.render_form(title=title, content=content, error=error)
 
@@ -1171,6 +1174,12 @@ class GqlEncoder(simplejson.JSONEncoder):
             methods = ['nickname', 'email', 'auth_domain'] 
             for method in methods: 
                 output[method] = getattr(obj, method)() 
+            return output 
+        elif isinstance(obj, blobstore.BlobInfo): 
+            output = {} 
+            #methods = ['filename', 'size', 'content_type'] 
+            #for method in methods: 
+            #    output[method] = getattr(obj, method)() 
             return output 
         return simplejson.JSONEncoder.default(self, obj) 
         

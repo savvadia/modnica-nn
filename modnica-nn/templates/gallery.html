@@ -10,6 +10,7 @@
 		</tr><tr>
 		{% endif %}
 		<td>
+			<img src="{{get_serving_url(entry.blob_key, 250)}}" /><br>
 			{{entry.key().id()}}<br>
 			{{entry.title}}<br>
 			{{entry.content}}<br>
