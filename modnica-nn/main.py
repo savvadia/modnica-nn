@@ -316,6 +316,10 @@ class AccountVitrina(Account):
 	def render_front(self, template, **kw):
 		super(AccountVitrina, self).render_front(template=template, activeMenuItem="vitrina", **kw)
 
+class AccountGallery(Account):
+	def render_front(self, template, **kw):
+		super(AccountGallery, self).render_front(template=template, activeMenuItem="gallery", **kw)
+
 #----------------------------------------------
 # [+] USERS
 #----------------------------------------------
@@ -848,34 +852,51 @@ class ModnicaPhotosPost(AccountCabinet, blobstore_handlers.BlobstoreUploadHandle
 
 		logging.info("ModnicaPhotosPost:post()")
 		try:
-			upload = self.get_uploads()[0]
-			blob_key=upload.key()
+			blob_info = self.get_uploads()[0]
 			username=self.getCurrentUsername()
 			if not title:
 				error = "Title is mandatory"
 			if error:
-				blobstore.delete(blob_key)
+				blob_info.delete()
 				self.render_form(title=title, content=content, error=error)
 				return
 
-			photo = Photo(title="123", content="", createdBy=username, blob_key=blob_key)
+			photo = Photo(title="123", content="", createdBy=username, blob_key=blob_info.key())
 			db.put(photo)
-			self.redirect('/photos/%s' % upload.key())
+			self.redirect('/photos/%d' % photo.key().id())
 		except:
 			logging.info("ModnicaPhotosPost:post() EXCEPTION")
 		#	error="Uploading failed"
 		#	self.render_form(title=title, content=content, error=error)
 
 class ModnicaPhotosView(AccountCabinet, blobstore_handlers.BlobstoreDownloadHandler):
-	def render_form(self, upload_url="", title="", content="", error="", **kw):
-		self.render_front("post_photo.html", upload_url=upload_url, title=title, content=content, error=error, **kw)
+	def render_form(self, photo, error="", **kw):
+		self.render_front("view_photo.html", photo=photo, error=error, **kw)
 
-	def get(self, photo_key):
+	def get(self, photo_id):
 		logging.info("ModnicaPhotosView:get()")
-		if not blobstore.get(photo_key):
-			self.error(404)
-		else:
-			self.send_blob(photo_key)
+		photo = Photo.get_by_id(long(photo_id))
+		if not photo:
+		  self.error(404)
+		  return
+		self.render_form(photo=photo)
+		# self.send_blob(photo_key)
+
+class ModnicaPhotosDownload(AccountCabinet, blobstore_handlers.BlobstoreDownloadHandler):
+	def get(self, photo_id):
+		logging.info("ModnicaPhotosDownload:get()")
+		photo = Photo.get_by_id(long(photo_id))
+		if not photo:
+		  self.error(404)
+		  return
+		self.send_blob(photo.blob_key, save_as=True)
+
+class ModnicaGallery(AccountGallery):
+	def get(self):
+		logging.info("ModnicaGallery:get()")
+		query = Photo.all()
+		entries, cache_age_message = self.getDbEntries("gallery", query)
+		self.render_front("gallery.html", entries=entries, cache_age_message=cache_age_message)
 
 #----------------------------------------------
 # [+] UTILS
@@ -1251,9 +1272,10 @@ app = webapp2.WSGIApplication(
 	('(/products/([0-9]+))()',          ModnicaProductsView),
 	('(/products/' + PAGE_RE + ")",     ModnicaProductsViewByPath),
 
+	('/gallery', 						ModnicaGallery),
 	('/photos/post', 					ModnicaPhotosPost),
-	('/photos/post', 					ModnicaPhotosPost),
-	('/photos/([^/]+)?', 		    	ModnicaPhotosView),
+	('/photos/([0-9]+)', 		    	ModnicaPhotosView),
+	('/photos/download/([0-9]+)',		ModnicaPhotosDownload),
 
 	('/signup',   						ModnicaSignup),
 	('/login',         					ModnicaLogin),

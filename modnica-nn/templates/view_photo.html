@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}{{photo.title}}{% endblock %}
+{% block content%}
+
+	{{photo.content}}
+	<hr>
+	<h3>File information</h3>
+	<table>
+		<tr><th>Filename</th><td>{{photo.blob_key.filename}}</td></tr>
+		<tr><th>Size</th><td>{{photo.blob_key.size}} bytes</td></tr>
+		<tr><th>Uploaded</th><td>{{photo.created}}</td></tr>
+		<tr><th>Uploaded by</th><td>{{photo.createdBy}}</td></tr>
+		<tr><th>Content Type</th><td>{{photo.blob_key.content_type}}</td></tr>
+	</table>
+
+	<p><a href="/photos/download/{{photo.key().id()}}">Download this file</a></p>	
+	<div class="error">{{error}}</div>
+{% endblock %}

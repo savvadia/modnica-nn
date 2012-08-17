@@ -41,6 +41,7 @@
 			<ul>
 			<li><a href="/" class="main {% if activeMenuItem == 'main' %}selected{% endif %}">Главная</a></li>
 			<li><a href="/vitrina" class="vitrina {% if activeMenuItem == 'vitrina' %}selected{% endif %}">Витрина</a></li>
+			<li><a href="/gallery" class="gallery {% if activeMenuItem == 'gallery' %}selected{% endif %}">Галерея</a></li>
 			{% if user and user.isAdmin == True %}
 			<li><a href="/users" class="cabinet {% if activeMenuItem == 'cabinet' %}selected{% endif %}">Кабинет</a></li>
 			{% endif %}
