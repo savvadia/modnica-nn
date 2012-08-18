@@ -55,7 +55,7 @@
     </div>
     <div id="footer">
         {% block footer %}
-        &copy; Copyright 2012 by <a href="/">DS</a>. {{cache_age_message}}
+        &copy; Copyright 2012 by <a href="/">DS</a>. {{cache_age_message['text']}}. <a href="/clear_cache/{{cache_age_message['key']}}">Clear</a> cache.
         {% endblock %}
     </div>
 </div>

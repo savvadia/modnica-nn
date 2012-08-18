@@ -31,6 +31,35 @@ jinja_env = jinja2.Environment(loader = jinja2.FileSystemLoader(template_dir),
 
 jinja_env.globals['get_serving_url'] = images.get_serving_url
 
+# GAE creates default logger before the execution reaches this file, so we 
+# set default logger to WARNINGS and add new loggers and set level for them
+logging.getLogger().setLevel(logging.INFO)
+
+h = logging.StreamHandler()
+f = logging.Formatter("%(module)14s:%(lineno)-4s %(levelname)-7s %(name)-4s|%(funcName)16s - %(message)s")
+h.setFormatter(f)
+
+logging.getLogger().handlers[0].setFormatter(f)
+
+logging.info("logging.root.handlers=" + str(len(logging.root.handlers)))
+
+trace_db   = logging.getLogger("db")
+trace_vit  = logging.getLogger("vit")
+trace_gal  = logging.getLogger("gal")
+trace_user = logging.getLogger("user")
+
+trace_db.setLevel(   logging.INFO)
+trace_vit.setLevel(  logging.DEBUG)
+trace_gal.setLevel(  logging.DEBUG)
+trace_user.setLevel( logging.INFO)
+
+# no reason to add new handlers, because default formatting is ok
+#if len(trace_db.handlers) == 0:
+#	trace_db.addHandler(h)
+#	trace_vit.addHandler(h)
+#	trace_gal.addHandler(h)
+#	trace_user.addHandler(h)
+
 #----------------------------------------------
 # [+] HANDLER
 #----------------------------------------------
@@ -63,10 +92,10 @@ def make_secure_val(s):
     return "%s|%s" % (s, hash_str(s))
 
 def check_secure_val(secure_val):
-    #logging.info("==> check_secure_val: secure_val=%s" % (secure_val))
+    trace_user.debug("==> check_secure_val: secure_val=%s" % (secure_val))
     val = secure_val.partition("|")[0]
     val = secure_val.partition("|")[0]
-    #logging.info("==> check_secure_val: secure_val=%s, val=%s" % (secure_val,val))
+    trace_user.debug("==> check_secure_val: secure_val=%s, val=%s" % (secure_val,val))
     if secure_val == make_secure_val(val):
         return val
     return None
@@ -78,7 +107,7 @@ def make_salt():
 def make_password_hash(name, password, salt=None):
     if not salt:
         salt = make_salt()
-    #logging.info("==> make_password_hash: n=" + name + " s=" + salt + " p=" + password)
+    trace_user.debug("==> make_password_hash: n=" + name + " s=" + salt + " p=" + password)
     h = hmac.new(str(name + salt), password).hexdigest()
     return '%s|%s' % (h, salt)
 
@@ -98,15 +127,15 @@ def format_date_for_json(dt):
 #----------------------------------------------
 
 class Account(MainPageHandler):
-	def render_front(self, template, cache_age_message="Page is not cached", activeMenuItem="undef", **kw):
+	def render_front(self, template, cache_age_message=dict(text="Page is not cached", key=None), activeMenuItem="undef", **kw):
 		message = ""
 		username_cookie      = self.request.cookies.get('user_id', None)
 		user = None
-		#logging.info("==> Account:render_front() cookie=" + str(username_cookie))
+		trace_user.debug("==> Account:render_front() cookie=" + str(username_cookie))
 		if username_cookie:
 			username = check_secure_val(username_cookie)
 			if username:
-				#logging.info("==> Account:render_front() username=" + username)
+				trace_user.debug("==> Account:render_front() username=" + username)
 				query = User.all().filter("username =", username)
 				user, ignored_cache_age_message = self.getDbEntry("username"+username, query)
 		cookie_message="cookie=%s, empty=%s" % (username_cookie, 
@@ -119,7 +148,7 @@ class Account(MainPageHandler):
 
 	def getCurrentUsername(self):
 		username_cookie      = self.request.cookies.get('user_id', None)
-		#logging.info("==> WikiAccount:getCurrentUsername() cookie=" + username_cookie)
+		trace_user.warn("==> WikiAccount:getCurrentUsername() cookie=" + username_cookie)
 		if username_cookie:
 			username = check_secure_val(username_cookie)
 			if username:
@@ -129,99 +158,102 @@ class Account(MainPageHandler):
 	# returns one entry and text message about cache age
 	def getDbEntry(self, key, query):
 		if not key:
-			logging.error("getDbEntry(): WARNING: no key is provided")
+			trace_db.exception("getDbEntry(): WARNING: no key is provided")
 		else:
 			data = memcache.get(key)
 			if data:
 				entry, saving_time = data[0], data[1]
-				logging.error("used CACHE with key=" + key)
+				if key.startswith("username") == False: 
+					trace_db.debug("used CACHE with key=" + key)
+				else:
+					trace_user.debug("used CACHE with key=" + key)
 				diff = datetime.datetime.now() - saving_time
-				cache_age_message = "Queried %s seconds ago by key=<%s>" % (diff.seconds, key)
+				cache_age_message = dict(text="Queried %s seconds ago by key=<%s>" % (diff.seconds, key), key=key)
 				return entry, cache_age_message
 		
 		if not query:
-			logging.error("getDbEntry(): ERROR: no query is provided, key=" + key)
+			trace_db.exception("getDbEntry(): ERROR: no query is provided, key=" + key)
 			return None, "not cached"
 			
-		logging.error("====> DB QUERY: " + show_query(query))
+		trace_db.warn("====> DB QUERY: " + show_query(query))
 		entries = query.fetch(1)
 		if not entries:
-			logging.error("getDbEntry(): ERROR: query returned no data, key=" + key)
+			trace_db.warn("getDbEntry(): ERROR: query returned no data, key=" + key)
 			return None, "not cached"
 			
 		entry = entries[0]
 		memcache.set(key, (entry, datetime.datetime.now()))
-		logging.error("stored CACHE for " + key)
+		trace_db.warn("stored CACHE for " + key)
 		return entry, "not cached"
 		
 	# returns one entry by its ID and text message about cache age
 	def getDbEntryById(self, objectName, objectId = -1):
 		if not objectName:
-			logging.error("getDbEntryById(): ERROR: objectName is not provided")
+			trace_db.exception("getDbEntryById(): ERROR: objectName is not provided")
 			return None, "not cached"
 		if not objectId or objectId == -1:
-			logging.error("getDbEntryById(): ERROR: objectId is not provided: " + str(objectId))
+			trace_db.exception("getDbEntryById(): ERROR: objectId is not provided: " + str(objectId))
 			return None, "not cached"
 		
 		key = objectName + str(objectId)
 		data = memcache.get(key)
 		if data:
 			entry, saving_time = data[0], data[1]
-			logging.error("used CACHE with key=" + key)
+			trace_db.info("used CACHE with key=" + key)
 			diff = datetime.datetime.now() - saving_time
-			cache_age_message = "Queried %s seconds ago by key=<%s>" % (diff.seconds, key)
+			cache_age_message = dict(text="Queried %s seconds ago by key=<%s>" % (diff.seconds, key), key=key)
 			return entry, cache_age_message
 		query = "SELECT * FROM " + objectName + " WHERE __key__ = KEY('" + objectName + "', " + str(objectId) + ")"
-		logging.error("====> DB QUERY: by ID:" + query)
+		trace_db.warn("====> DB QUERY: by ID:" + query)
 		query = db.GqlQuery(query)
 		entries = query.fetch(1)
 		if not entries:
-			logging.error("getDbEntryById(): ERROR: query returned no data, key=" + key)
+			trace_db.warn("getDbEntryById(): ERROR: query returned no data, key=" + key)
 			return None, "not cached"
 #		logging.error("stored FIXME::: ========> got " + str(entry) + "; " + repr(entry) + + "; key="+ key)
 		entry = entries[0]
 		memcache.set(key, (entry, datetime.datetime.now()))
-		logging.error("stored CACHE for " + key)
+		trace_db.warn("stored CACHE for " + key)
 		return entry, "not cached"
 		
 	# returns one entry and text message about cache age
 	def getDbEntries(self, key, query, noOfEntries = 100):
 		if not key:
-			logging.error("getDbEntries(): WARNING: no key is provided")
+			trace_db.exception("getDbEntries(): WARNING: no key is provided")
 		else:
 			data = memcache.get(key)
 			if data:
 				entries, saving_time = data[0], data[1]
-				logging.error("used CACHE with key=" + key)
+				trace_db.info("used CACHE with key=" + key)
 				diff = datetime.datetime.now() - saving_time
 				cache_age_message = "Queried %s seconds ago by key=<%s>" % (diff.seconds, key)
 				return entries, cache_age_message
 		
 		if not query:
-			logging.error("getDbEntries(): ERROR: no query is provided, key=" + key)
+			trace_db.exception("getDbEntries(): ERROR: no query is provided, key=" + key)
 			return None, "not cached"
 			
-		logging.error("====> DB QUERY: " + show_query(query))
+		trace_db.warn("====> DB QUERY: " + show_query(query))
 		entries = query.fetch(noOfEntries)
 		if not entries:
-			logging.error("getDbEntries(): ERROR: query returned no data, key=" + key)
+			trace_db.warn("getDbEntries(): ERROR: query returned no data, key=" + key)
 			
 		memcache.set(key, (entries, datetime.datetime.now()))
-		logging.error("stored CACHE for " + key)
+		trace_db.warn("stored CACHE for " + key)
 		return entries, "not cached"
 
 	def saveObj(self, obj, keyList = {}):
 		obj.put()
-		logging.error("#### DB QUERY: SAVED ID=" + str(obj.key().id())+ " " + obj.to_str())
-				
-		#logging.info("DEBUG: ====>" + str(db.to_dict(a)) + " ::: " + str(a.key().id()))
+		trace_db.warn("#### DB QUERY: SAVED [" + obj.__class__.__name__ + "]ID=" + str(obj.key().id()))
+		trace_db.debug("#### DB QUERY: SAVED " + obj.to_str())
+		
 		for key in keyList:
 			memcache.delete(key)
-			logging.error("cleared CACHE for " + key)
+		trace_db.warn("cleared CACHE for " + str(keyList))
 
 	def clearCache(self, key):
 		memcache.delete(key)
-		logging.error("cleared CACHE for " + key)
+		trace_db.warn("cleared CACHE for " + key)
 		
 	def getMaxIdOnVitrina(self):
 		query = Product.all()
@@ -235,7 +267,7 @@ class Account(MainPageHandler):
 		for e in entries:
 			if e.idOnVitrina > idOnVitrina:
 				idOnVitrina = e.idOnVitrina
-		logging.info("getMaxIdOnVitrina returns idOnVitrina=" + str(idOnVitrina))
+		trace_vit.info("getMaxIdOnVitrina returns idOnVitrina=" + str(idOnVitrina))
 		return idOnVitrina
 
 	def getPrevEntryOnVitrina(self, idOnVitrina):
@@ -249,32 +281,32 @@ class Account(MainPageHandler):
 		query.order("idOnVitrina")
 		entries, cache_age_message = self.getDbEntries("vitrina", query)
 		if not entries:
-			logging.error("getPrevEntryOnVitrina(): no entries on vitrina")
+			trace_vit.warn("getPrevEntryOnVitrina(): no entries on vitrina")
 			return None
 		foundEntry = None
 		for e in entries:
-			logging.error("getPrevEntryOnVitrina(): FIXME CHECKING ID=" + str(e.key().id())+ "." + str(e.idOnVitrina) + " < " + str(idOnVitrina))
+			trace_vit.error("getPrevEntryOnVitrina(): FIXME CHECKING ID=" + str(e.key().id())+ "." + str(e.idOnVitrina) + " < " + str(idOnVitrina))
 			if foundEntry is None:
 				if e.idOnVitrina == idOnVitrina:
 					continue
 				elif e.idOnVitrina < idOnVitrina:
 					foundEntry = e
-					logging.error("getPrevEntryOnVitrina(): FIXME FOUND ID=" + str(foundEntry.key().id())+ " as prev entry for idOnVitrina=" + str(idOnVitrina))
+					trace_vit.debug("getPrevEntryOnVitrina(): FIXME FOUND ID=" + str(foundEntry.key().id())+ " as prev entry for idOnVitrina=" + str(idOnVitrina))
 			# min ... found < desired < given ... max
 			elif foundEntry.idOnVitrina < e.idOnVitrina and e.idOnVitrina < idOnVitrina:
 				foundEntry = e
-				logging.error("getPrevEntryOnVitrina(): FIXME FOUND ID=" + str(foundEntry.key().id())+ " as prev entry for idOnVitrina=" + str(idOnVitrina))
+				trace_vit.debug("getPrevEntryOnVitrina(): FIXME FOUND ID=" + str(foundEntry.key().id())+ " as prev entry for idOnVitrina=" + str(idOnVitrina))
 			else:
-				logging.error("getPrevEntryOnVitrina(): FIXME IGNORES ID=" + str(foundEntry.key().id())+ "." + str(foundEntry.idOnVitrina) + " < " + str(e.key().id())+ "." + str(e.idOnVitrina) + " < " + str(idOnVitrina))
+				trace_vit.debug("getPrevEntryOnVitrina(): FIXME IGNORES ID=" + str(foundEntry.key().id())+ "." + str(foundEntry.idOnVitrina) + " < " + str(e.key().id())+ "." + str(e.idOnVitrina) + " < " + str(idOnVitrina))
 		if not foundEntry:
-			logging.error("getPrevEntryOnVitrina(): prev entry not found for idOnVitrina=" + str(idOnVitrina))
+			trace_vit.warn("getPrevEntryOnVitrina(): prev entry not found for idOnVitrina=" + str(idOnVitrina))
 			return None
-		logging.error("getPrevEntryOnVitrina(): FIXME FOUND FINAL ID=" + str(foundEntry.key().id())+ " as prev entry for idOnVitrina=" + str(idOnVitrina))
+		trace_vit.warn("getPrevEntryOnVitrina(): FIXME FOUND FINAL ID=" + str(foundEntry.key().id())+ " as prev entry for idOnVitrina=" + str(idOnVitrina))
 		return foundEntry
 
 	def getNextEntryOnVitrina(self, idOnVitrina):
 		if idOnVitrina == -1:
-			logging.error("getNextEntryOnVitrina(): idOnVitrina = -1")
+			trace_vit.error("getNextEntryOnVitrina(): idOnVitrina = -1")
 			return None
 			
 		query = Product.all()
@@ -283,29 +315,33 @@ class Account(MainPageHandler):
 		query.order("idOnVitrina")
 		entries, cache_age_message = self.getDbEntries("vitrina", query)
 		if not entries:
-			logging.error("getNextEntryOnVitrina(): no entries on vitrina")
+			trace_vit.error("getNextEntryOnVitrina(): no entries on vitrina")
 			return None
 		foundEntry = None
 		for e in entries:
-			logging.error("getNextEntryOnVitrina(): FIXME CHECKING ID=" + str(idOnVitrina) + " < " + str(e.key().id())+ "." + str(e.idOnVitrina))
+			trace_vit.debug("getNextEntryOnVitrina(): FIXME CHECKING ID=" + str(idOnVitrina) + " < " + str(e.key().id())+ "." + str(e.idOnVitrina))
 			if foundEntry is None:
 				if e.idOnVitrina == idOnVitrina:
 					continue
 				elif idOnVitrina < e.idOnVitrina:
 					foundEntry = e
-					logging.error("getNextEntryOnVitrina(): FIXME FOUND ID=" + str(foundEntry.key().id())+ " as next entry for idOnVitrina=" + str(idOnVitrina))
+					trace_vit.debug("getNextEntryOnVitrina(): FIXME FOUND ID=" + str(foundEntry.key().id())+ " as next entry for idOnVitrina=" + str(idOnVitrina))
 			# min ... given < desired < found ... max
 			elif idOnVitrina < e.idOnVitrina and e.idOnVitrina < foundEntry.idOnVitrina:
 				foundEntry = e
-				logging.error("getNextEntryOnVitrina(): FIXME FOUND ID=" + str(foundEntry.key().id())+ " as next entry for idOnVitrina=" + str(idOnVitrina))
+				trace_vit.debug("getNextEntryOnVitrina(): FIXME FOUND ID=" + str(foundEntry.key().id())+ " as next entry for idOnVitrina=" + str(idOnVitrina))
 			else:
-				logging.error("getNextEntryOnVitrina(): FIXME IGNORES ID=" + str(idOnVitrina) + " < " + str(e.key().id())+ "." + str(e.idOnVitrina) + " < " + str(foundEntry.key().id())+ "." + str(foundEntry.idOnVitrina))
+				trace_vit.debug("getNextEntryOnVitrina(): FIXME IGNORES ID=" + str(idOnVitrina) + " < " + str(e.key().id())+ "." + str(e.idOnVitrina) + " < " + str(foundEntry.key().id())+ "." + str(foundEntry.idOnVitrina))
 		if not foundEntry:
-			logging.error("getNextEntryOnVitrina(): next entry not found for idOnVitrina=" + str(idOnVitrina))
+			trace_vit.warn("getNextEntryOnVitrina(): next entry not found for idOnVitrina=" + str(idOnVitrina))
 			return None
 		
-		logging.error("getNextEntryOnVitrina(): FIXME FOUND FINAL ID=" + str(foundEntry.key().id())+ " as next entry for idOnVitrina=" + str(idOnVitrina))
+		trace_vit.warn("getNextEntryOnVitrina(): FIXME FOUND FINAL ID=" + str(foundEntry.key().id())+ " as next entry for idOnVitrina=" + str(idOnVitrina))
 		return foundEntry
+
+class AccountClearCache(Account):
+	def get(self, key):
+		self.clearCache(key)
 
 class AccountMain(Account):
 	def render_front(self, template, **kw):
@@ -1259,39 +1295,49 @@ class MainPage(AccountMain):
 # [+] ROUTING
 #----------------------------------------------
 
-PAGE_RE = r'((?:[a-zA-Z0-9_-]+/?)*)'
-app = webapp2.WSGIApplication(
-   [
-	('/', 	            				MainPage),
-	('/users',    						ModnicaUsers),
-	('/vitrina',    					ModnicaVitrina),
-	('/vitrina/edit', 					ModnicaVitrinaEdit),
+def main():
+	# Set the logging level in the main function
+	# See the section on Requests and App Caching for information on how
+	# App Engine reuses your request handlers when you specify a main function
 
-	('/articles', 						ModnicaArticles),
-	('/articles/post', 					ModnicaArticlesPost),
-	('(/articles/edit/?([0-9]*))', 		ModnicaArticlesEdit),
-	('/articles/versions/' + PAGE_RE, 	ModnicaArticlesVersions),
-	('(/articles/([0-9]+))()',          ModnicaArticlesView),
-	('(/articles/?([0-9]*))/' + PAGE_RE,ModnicaArticlesView),
+	#logging.info("======================== START ============================")
 
-	('/products', 						ModnicaProducts),
-	('/products/post', 					ModnicaProductsPost),
-	('(/products/edit/?([0-9]*))', 		ModnicaProductsEdit),
-	('/products/versions/' + PAGE_RE, 	ModnicaProductsVersions),
-	('(/products/([0-9]+))()',          ModnicaProductsView),
-	('(/products/' + PAGE_RE + ")",     ModnicaProductsViewByPath),
+	PAGE_RE = r'((?:[a-zA-Z0-9_-]+/?)*)'
+	app = webapp2.WSGIApplication(
+	   [
+		('/', 	            				MainPage),
+		('/users',    						ModnicaUsers),
+		('/vitrina',    					ModnicaVitrina),
+		('/vitrina/edit', 					ModnicaVitrinaEdit),
 
-	('/gallery', 						ModnicaGallery),
-	('/photos/post', 					ModnicaPhotosPost),
-	('/photos/([0-9]+)', 		    	ModnicaPhotosView),
-	('/photos/download/([0-9]+)',		ModnicaPhotosDownload),
+		('/articles', 						ModnicaArticles),
+		('/articles/post', 					ModnicaArticlesPost),
+		('(/articles/edit/?([0-9]*))', 		ModnicaArticlesEdit),
+		('/articles/versions/' + PAGE_RE, 	ModnicaArticlesVersions),
+		('(/articles/([0-9]+))()',          ModnicaArticlesView),
+		('(/articles/?([0-9]*))/' + PAGE_RE,ModnicaArticlesView),
 
-	('/signup',   						ModnicaSignup),
-	('/login',         					ModnicaLogin),
-	('/logout',         				ModnicaLogout)
-	],
-   debug=True)
+		('/products', 						ModnicaProducts),
+		('/products/post', 					ModnicaProductsPost),
+		('(/products/edit/?([0-9]*))', 		ModnicaProductsEdit),
+		('/products/versions/' + PAGE_RE, 	ModnicaProductsVersions),
+		('(/products/([0-9]+))()',          ModnicaProductsView),
+		('(/products/' + PAGE_RE + ")",     ModnicaProductsViewByPath),
 
+		('/gallery', 						ModnicaGallery),
+		('/photos/post', 					ModnicaPhotosPost),
+		('/photos/([0-9]+)', 		    	ModnicaPhotosView),
+		('/photos/download/([0-9]+)',		ModnicaPhotosDownload),
 
-app.run()
+		('/signup',   						ModnicaSignup),
+		('/login',         					ModnicaLogin),
+		('/logout',         				ModnicaLogout),
 
+		('/clear_cache/' + PAGE_RE,    		AccountClearCache)
+		],
+	   debug=True)
+
+	app.run()
+
+if __name__ == '__main__':
+    main()
