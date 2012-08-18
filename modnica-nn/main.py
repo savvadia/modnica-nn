@@ -47,11 +47,13 @@ trace_db   = logging.getLogger("db")
 trace_vit  = logging.getLogger("vit")
 trace_gal  = logging.getLogger("gal")
 trace_user = logging.getLogger("user")
+trace_cach = logging.getLogger("cach")
 
 trace_db.setLevel(   logging.INFO)
 trace_vit.setLevel(  logging.DEBUG)
 trace_gal.setLevel(  logging.DEBUG)
 trace_user.setLevel( logging.INFO)
+trace_cach.setLevel( logging.DEBUG)
 
 # no reason to add new handlers, because default formatting is ok
 #if len(trace_db.handlers) == 0:
@@ -131,11 +133,12 @@ class Account(MainPageHandler):
 		message = ""
 		username_cookie      = self.request.cookies.get('user_id', None)
 		user = None
-		trace_user.debug("==> Account:render_front() cookie=" + str(username_cookie))
+		trace_user.debug("Account: cookie=" + str(username_cookie))
+		trace_cach.debug("cache_age_message=" + str(cache_age_message))
 		if username_cookie:
 			username = check_secure_val(username_cookie)
 			if username:
-				trace_user.debug("==> Account:render_front() username=" + username)
+				trace_user.debug("Account username=" + username)
 				query = User.all().filter("username =", username)
 				user, ignored_cache_age_message = self.getDbEntry("username"+username, query)
 		cookie_message="cookie=%s, empty=%s" % (username_cookie, 
@@ -148,7 +151,7 @@ class Account(MainPageHandler):
 
 	def getCurrentUsername(self):
 		username_cookie      = self.request.cookies.get('user_id', None)
-		trace_user.warn("==> WikiAccount:getCurrentUsername() cookie=" + username_cookie)
+		trace_user.warn("Account cookie=" + username_cookie)
 		if username_cookie:
 			username = check_secure_val(username_cookie)
 			if username:
@@ -184,7 +187,7 @@ class Account(MainPageHandler):
 		entry = entries[0]
 		memcache.set(key, (entry, datetime.datetime.now()))
 		trace_db.warn("stored CACHE for " + key)
-		return entry, "not cached"
+		return entry, dict(text="Queried NOW by key=<%s>" % key, key=key)
 		
 	# returns one entry by its ID and text message about cache age
 	def getDbEntryById(self, objectName, objectId = -1):
@@ -214,7 +217,7 @@ class Account(MainPageHandler):
 		entry = entries[0]
 		memcache.set(key, (entry, datetime.datetime.now()))
 		trace_db.warn("stored CACHE for " + key)
-		return entry, "not cached"
+		return entry, dict(text="Queried NOW by key=<%s>" % key, key=key)
 		
 	# returns one entry and text message about cache age
 	def getDbEntries(self, key, query, noOfEntries = 100):
@@ -226,21 +229,21 @@ class Account(MainPageHandler):
 				entries, saving_time = data[0], data[1]
 				trace_db.info("used CACHE with key=" + key)
 				diff = datetime.datetime.now() - saving_time
-				cache_age_message = "Queried %s seconds ago by key=<%s>" % (diff.seconds, key)
+				cache_age_message = dict(text="Queried %s seconds ago by key=<%s>" % (diff.seconds, key), key=key)
 				return entries, cache_age_message
 		
 		if not query:
 			trace_db.exception("getDbEntries(): ERROR: no query is provided, key=" + key)
 			return None, "not cached"
 			
-		trace_db.warn("====> DB QUERY: " + show_query(query))
+		trace_db.warn("###> DB QUERY: " + show_query(query))
 		entries = query.fetch(noOfEntries)
 		if not entries:
 			trace_db.warn("getDbEntries(): ERROR: query returned no data, key=" + key)
 			
 		memcache.set(key, (entries, datetime.datetime.now()))
 		trace_db.warn("stored CACHE for " + key)
-		return entries, "not cached"
+		return entries, dict(text="Queried NOW by key=<%s>" % key, key=key)
 
 	def saveObj(self, obj, keyList = {}):
 		obj.put()
@@ -342,6 +345,7 @@ class Account(MainPageHandler):
 class AccountClearCache(Account):
 	def get(self, key):
 		self.clearCache(key)
+		self.redirect("/")
 
 class AccountMain(Account):
 	def render_front(self, template, **kw):
