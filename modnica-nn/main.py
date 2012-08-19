@@ -50,7 +50,7 @@ trace_cach = logging.getLogger("cach")
 trace_prod = logging.getLogger("prod")
 trace_phot = logging.getLogger("phot")
 
-trace_db.setLevel(   logging.INFO)
+trace_db.setLevel(   logging.DEBUG)
 trace_art.setLevel(  logging.DEBUG)
 trace_vit.setLevel(  logging.DEBUG)
 trace_gal.setLevel(  logging.DEBUG)
@@ -548,9 +548,6 @@ class ModnicaArticlesEdit(AccountCabinet):
 		memcache.flush_all()
 
 class ModnicaArticlesView(Account):
-	def render_form(self, page_id, title="", content="", error="", **kw):
-		self.render_front("view_article.html", title=title, content=content, error=error, **kw)
-
 	def get(self, page_id, pagePath):
 		username = self.getCurrentUsername()
 		trace_art.debug("ModnicaArticlesView: id=<"+page_id+">, pagePath=<"+pagePath+">")
@@ -566,7 +563,7 @@ class ModnicaArticlesView(Account):
 			trace_art.error("404 - entry not found: page_id=" + page_id + ", pagePath=" + pagePath)
 			self.error(404)
 			return
-		self.render_form(page_id, title=entry.title, content=entry.content, cache_age_message=cache_age_message)
+		self.render_front("view_article.html", entry=entry, error="", cache_age_message=cache_age_message, **kw)
 
 #----------------------------------------------
 # [+] VITRINA
@@ -1286,18 +1283,18 @@ class Photo(BaseModel):
 #----------------------------------------------
 
 class MainPage(AccountMain):
-	def render_form(self, title="", content="", error=""):
+	def get(self):
 		query = Article.all()
 		query.filter("isMain =", True)
 		query.filter("isLatest =", True)
-		entries, cache_age_message = self.getDbEntries("main-page", query, 1)
-		
-		if entries is None:
-			logging.error("MAIN PAGE NOT FOUND")
-		self.render_front("main.html", title=title, content=content, error=error, entries=entries, cache_age_message=cache_age_message)
+		entry, cache_age_message = self.getDbEntry("main-page", query)
 
-	def get(self):
-		self.render_form()
+		if entry is None:
+			trace_art.error("MAIN PAGE NOT FOUND")
+			self.error(404)
+			return
+		trace_art.debug("found main page: " + str(repr(entry)) + ", cache_age_message=" + repr(cache_age_message))
+		self.render_front("view_article.html", entry=entry, error="", cache_age_message=cache_age_message)
 
 #----------------------------------------------
 # [+] ROUTING
@@ -1322,8 +1319,8 @@ def main():
 		('/articles/post', 					ModnicaArticlesPost),
 		('(/articles/edit/?([0-9]*))', 		ModnicaArticlesEdit),
 		('/articles/versions/' + PAGE_RE, 	ModnicaArticlesVersions),
-		('/articles/([0-9]+)()',          ModnicaArticlesView),
-		('/articles/?([0-9]*)/' + PAGE_RE,ModnicaArticlesView),
+		('/articles/([0-9]+)()',            ModnicaArticlesView),
+		('/articles/?([0-9]*)/' + PAGE_RE,  ModnicaArticlesView),
 
 		('/products', 						ModnicaProducts),
 		('/products/post', 					ModnicaProductsPost),

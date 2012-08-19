@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% block title %}{{title | safe}}{% endblock %}
+{% block title %}{{entry.title | safe}}{% endblock %}
 {% block content%}
-	{{content | safe}}
+	{{entry.content | safe}}
 	<div class="error">{{error}}</div>
 {% endblock %}
 
