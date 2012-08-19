@@ -36,7 +36,7 @@ jinja_env.globals['get_serving_url'] = images.get_serving_url
 logging.getLogger().setLevel(logging.INFO)
 
 h = logging.StreamHandler()
-f = logging.Formatter("%(module)14s:%(lineno)-4s %(levelname)-7s %(name)-4s|%(funcName)16s - %(message)s")
+f = logging.Formatter("%(module)20s:%(lineno)-4s %(levelname)-7s %(name)-4s|%(funcName)16s - %(message)s")
 h.setFormatter(f)
 
 logging.getLogger().handlers[0].setFormatter(f)
@@ -44,16 +44,20 @@ logging.getLogger().handlers[0].setFormatter(f)
 logging.info("logging.root.handlers=" + str(len(logging.root.handlers)))
 
 trace_db   = logging.getLogger("db")
+trace_art  = logging.getLogger("art")
 trace_vit  = logging.getLogger("vit")
 trace_gal  = logging.getLogger("gal")
 trace_user = logging.getLogger("user")
 trace_cach = logging.getLogger("cach")
+trace_prod = logging.getLogger("prod")
 
 trace_db.setLevel(   logging.INFO)
+trace_art.setLevel(  logging.DEBUG)
 trace_vit.setLevel(  logging.DEBUG)
 trace_gal.setLevel(  logging.DEBUG)
 trace_user.setLevel( logging.INFO)
 trace_cach.setLevel( logging.DEBUG)
+trace_prod.setLevel( logging.DEBUG)
 
 # no reason to add new handlers, because default formatting is ok
 #if len(trace_db.handlers) == 0:
@@ -535,15 +539,14 @@ class ModnicaArticlesEdit(AccountCabinet):
 		query = Article.all()
 		query.filter("pagePath =", pagePath)
 		query.filter("isLatest =", True)
-		logging.error("DB QUERY: " + show_query(query))
+		trace_art.warn("DB QUERY: " + show_query(query))
 		entries = query.fetch(100)
 		for e in entries:
 			logging.error("===========+> CLEARING IS_LATEST for " + pagePath + ", id=" + str(e.key().id()))
 			e.isLatest = False
-			logging.error("e=<"+str(e)+">")
-			saveRecord(page_path, e)
+			self.saveObj(e, {e.pagePath})
 		a = Article(title=title, content=content, createdBy=username, pagePath=pagePath, isLatest=True)
-		saveRecord(page_path, a)
+		self.saveObj(a, {pagePath})
 		self.redirect("/articles/" + pagePath)
 		memcache.flush_all()
 
@@ -551,16 +554,20 @@ class ModnicaArticlesView(Account):
 	def render_form(self, page_id, title="", content="", error="", **kw):
 		self.render_front("view_article.html", title=title, content=content, error=error, **kw)
 
-	def get(self, page_path, page_id, pagePath):
+	def get(self, page_id, pagePath):
 		username = self.getCurrentUsername()
-		logging.error("ModnicaArticlesView:get(): id=<"+page_id+">, pagePath=<"+pagePath+">, path=<"+page_path+">")
+		trace_art.debug("ModnicaArticlesView: id=<"+page_id+">, pagePath=<"+pagePath+">")
 		
-		key      =  "article-"+page_id
-		query = Article.all().filter("__key__ =", db.Key.from_path('Article', int(page_id)))
+		if page_id:
+			key      =  "article-"+str(page_id)
+			query = Article.all().filter("__key__ =", db.Key.from_path('Article', int(page_id)))
+		else:
+			key      =  "article-"+str(pagePath)
+			query = Article.all().filter("pagePath =", pagePath).filter("isLatest =", True)
 		entry, cache_age_message = self.getDbEntry(key, query)
 		if not entry:
-			logging.error("ModnicaArticlesView:get(): entry not found: " + page_id + page_path)
-			self.redirect("/articles")
+			trace_art.error("404 - entry not found: page_id=" + page_id + ", pagePath=" + pagePath)
+			self.error(404)
 			return
 		self.render_form(page_id, title=entry.title, content=entry.content, cache_age_message=cache_age_message)
 
@@ -1318,8 +1325,8 @@ def main():
 		('/articles/post', 					ModnicaArticlesPost),
 		('(/articles/edit/?([0-9]*))', 		ModnicaArticlesEdit),
 		('/articles/versions/' + PAGE_RE, 	ModnicaArticlesVersions),
-		('(/articles/([0-9]+))()',          ModnicaArticlesView),
-		('(/articles/?([0-9]*))/' + PAGE_RE,ModnicaArticlesView),
+		('/articles/([0-9]+)()',          ModnicaArticlesView),
+		('/articles/?([0-9]*)/' + PAGE_RE,ModnicaArticlesView),
 
 		('/products', 						ModnicaProducts),
 		('/products/post', 					ModnicaProductsPost),
