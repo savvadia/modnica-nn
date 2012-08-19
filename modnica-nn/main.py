@@ -133,7 +133,7 @@ def format_date_for_json(dt):
 #----------------------------------------------
 
 class Account(MainPageHandler):
-	def render_front(self, template, cache_age_message=dict(text="Page is not cached", key=None), activeMenuItem="undef", **kw):
+	def render_front(self, template, cache_age_message=dict(text="Page is not cached", key=None), activeMenuItem="undef", links={}, **kw):
 		message = ""
 		username_cookie      = self.request.cookies.get('user_id', None)
 		user = None
@@ -940,7 +940,9 @@ class ModnicaGallery(AccountGallery):
 		logging.info("ModnicaGallery:get()")
 		query = Photo.all()
 		entries, cache_age_message = self.getDbEntries("gallery", query)
-		self.render_front("gallery.html", entries=entries, cache_age_message=cache_age_message)
+		links = { dict(caption="Добавить категорию", class="add", path="/gallery/add") }
+
+		self.render_front("gallery.html", entries=entries, cache_age_message=cache_age_message, links=links)
 
 #----------------------------------------------
 # [+] UTILS

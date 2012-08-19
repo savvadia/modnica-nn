@@ -49,6 +49,11 @@
 	</div>
 	<div id="main">
 		<div id="content">
+			<div class="contextual">
+			{% for link in links %}
+			<a href="{{link.path}}" class="icon icon-{{link.class}}">{{link.caption}}</a> 
+			{% endfor %}
+			</div>
 			<h2>{{ self.title() }}</h2>
 			{% block content %}Undefined content{% endblock %}
 		</div>
