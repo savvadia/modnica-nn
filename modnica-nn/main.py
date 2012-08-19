@@ -49,6 +49,7 @@ trace_user = logging.getLogger("user")
 trace_cach = logging.getLogger("cach")
 trace_prod = logging.getLogger("prod")
 trace_phot = logging.getLogger("phot")
+trace_menu = logging.getLogger("menu")
 
 trace_db.setLevel(   logging.DEBUG)
 trace_art.setLevel(  logging.DEBUG)
@@ -58,6 +59,7 @@ trace_user.setLevel( logging.INFO)
 trace_cach.setLevel( logging.INFO)
 trace_prod.setLevel( logging.DEBUG)
 trace_phot.setLevel( logging.DEBUG)
+trace_menu.setLevel( logging.DEBUG)
 
 # no reason to add new handlers, because default formatting is ok
 #if len(trace_db.handlers) == 0:
@@ -133,12 +135,13 @@ def format_date_for_json(dt):
 #----------------------------------------------
 
 class Account(MainPageHandler):
-	def render_front(self, template, cache_age_message=dict(text="Page is not cached", key=None), activeMenuItem="undef", links={}, **kw):
+	def render_front(self, template, cache_age_message=dict(text="Page is not cached", key=None), links=[], activeMenuItem="undef", **kw):
 		message = ""
 		username_cookie      = self.request.cookies.get('user_id', None)
 		user = None
 		trace_user.debug("Account: cookie=" + str(username_cookie))
 		trace_cach.debug("cache_age_message=" + str(cache_age_message))
+		trace_menu.debug("Links=" + str(links))
 		if username_cookie:
 			username = check_secure_val(username_cookie)
 			if username:
@@ -151,6 +154,7 @@ class Account(MainPageHandler):
 		self.render(template, user=user,
 		                      cookie_message=cookie_message,
 		                      cache_age_message=cache_age_message,
+		                      links=links,
 		                      activeMenuItem=activeMenuItem, **kw)
 
 	def getCurrentUsername(self):
@@ -579,7 +583,9 @@ class ModnicaVitrina(AccountVitrina):
 		query.order("idOnVitrina")
 		entries, cache_age_message = self.getDbEntries(key, query)
 		if entries:
-			self.render_front("vitrina.html", entries=entries, cache_age_message=cache_age_message)
+			links = [ dict(caption="Add new product", linkClass="add", linkPath="/products/add"),
+					  dict(caption="Edit vitrina", linkClass="edit", linkPath="/vitrina/edit") ]
+			self.render_front("vitrina.html", entries=entries, links=links, cache_age_message=cache_age_message)
 		else:
 			self.redirect("/")
 
@@ -601,7 +607,9 @@ class ModnicaVitrinaEdit(AccountCabinet):
 		entriesNotOnVitrina, cache_age_message = self.getDbEntries(key, query)
 		
 		if entries or entriesNotOnVitrina:
-			self.render_front("edit_vitrina.html", entries=entries, entriesNotOnVitrina=entriesNotOnVitrina, cache_age_message=cache_age_message)
+			links = [ dict(caption="Add new product", linkClass="add", linkPath="/products/add"),
+					  dict(caption="Finish editing", linkClass="back", linkPath="/vitrina") ]
+			self.render_front("edit_vitrina.html", entries=entries, entriesNotOnVitrina=entriesNotOnVitrina, links=links, cache_age_message=cache_age_message)
 		else:
 			self.render_front("empty_vitrina.html", cache_age_message=cache_age_message)
 
@@ -923,7 +931,10 @@ class ModnicaPhotosView(AccountCabinet, blobstore_handlers.BlobstoreDownloadHand
 		if not photo:
 		  self.error(404)
 		  return
-		self.render_form(photo=photo)
+		links = [ dict(caption="Add new photo", linkClass="add", linkPath="/photos/add"),
+		          dict(caption="Delete", linkClass="del", linkPath="/photos/delete"),
+		          dict(caption="Edit", linkClass="edit", linkPath="/photos/edit") ]
+		self.render_form(photo=photo, links=links)
 		# self.send_blob(photo_key)
 
 class ModnicaPhotosDownload(AccountCabinet, blobstore_handlers.BlobstoreDownloadHandler):
@@ -940,9 +951,8 @@ class ModnicaGallery(AccountGallery):
 		logging.info("ModnicaGallery:get()")
 		query = Photo.all()
 		entries, cache_age_message = self.getDbEntries("gallery", query)
-		links = { dict(caption="Добавить категорию", class="add", path="/gallery/add") }
-
-		self.render_front("gallery.html", entries=entries, cache_age_message=cache_age_message, links=links)
+		links = [ dict(caption="Add category", linkClass="add", linkPath="/gallery/add") ]
+		self.render_front("gallery.html", entries=entries, links=links, cache_age_message=cache_age_message)
 
 #----------------------------------------------
 # [+] UTILS
