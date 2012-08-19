@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block title %}{{photo.title}}{% endblock %}
+{% block title %}{{photo.title | safe}}{% endblock %}
 {% block content%}
 
-	{{photo.content}}
+	{{photo.content | safe}}
 	<hr>
 	<img src="{{get_serving_url(photo.blob_key, 250)}}" /><br>
 	<h3>File information</h3>

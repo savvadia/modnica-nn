@@ -3,8 +3,8 @@
 {% block content%}
 	{% for entry in entries %}
 		<div class="article">
-			<div class="article-subject">{{entry.title}}</div>
-			<div class="article-content">{{entry.content}}</div>
+			<div class="article-subject">{{entry.title | safe}}</div>
+			<div class="article-content">{{entry.content | safe}}</div>
 		</div>
 	{% endfor %}
 {% endblock %}

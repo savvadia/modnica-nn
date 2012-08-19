@@ -41,8 +41,6 @@ h.setFormatter(f)
 
 logging.getLogger().handlers[0].setFormatter(f)
 
-logging.info("logging.root.handlers=" + str(len(logging.root.handlers)))
-
 trace_db   = logging.getLogger("db")
 trace_art  = logging.getLogger("art")
 trace_vit  = logging.getLogger("vit")
@@ -50,14 +48,16 @@ trace_gal  = logging.getLogger("gal")
 trace_user = logging.getLogger("user")
 trace_cach = logging.getLogger("cach")
 trace_prod = logging.getLogger("prod")
+trace_phot = logging.getLogger("phot")
 
 trace_db.setLevel(   logging.INFO)
 trace_art.setLevel(  logging.DEBUG)
 trace_vit.setLevel(  logging.DEBUG)
 trace_gal.setLevel(  logging.DEBUG)
 trace_user.setLevel( logging.INFO)
-trace_cach.setLevel( logging.DEBUG)
+trace_cach.setLevel( logging.INFO)
 trace_prod.setLevel( logging.DEBUG)
+trace_phot.setLevel( logging.DEBUG)
 
 # no reason to add new handlers, because default formatting is ok
 #if len(trace_db.handlers) == 0:
@@ -155,7 +155,7 @@ class Account(MainPageHandler):
 
 	def getCurrentUsername(self):
 		username_cookie      = self.request.cookies.get('user_id', None)
-		trace_user.warn("Account cookie=" + username_cookie)
+		trace_user.debug("Account cookie=" + username_cookie)
 		if username_cookie:
 			username = check_secure_val(username_cookie)
 			if username:
@@ -217,7 +217,7 @@ class Account(MainPageHandler):
 		if not entries:
 			trace_db.warn("getDbEntryById(): ERROR: query returned no data, key=" + key)
 			return None, "not cached"
-#		logging.error("stored FIXME::: ========> got " + str(entry) + "; " + repr(entry) + + "; key="+ key)
+		trace_db.debug("stored ==> got " + str(entry) + "; " + repr(entry) + + "; key="+ key)
 		entry = entries[0]
 		memcache.set(key, (entry, datetime.datetime.now()))
 		trace_db.warn("stored CACHE for " + key)
@@ -408,11 +408,9 @@ class ModnicaArticles(AccountCabinet):
 		self.render_front("articles.html", entries=entries, cache_age_message=cache_age_message)
 
 	def post(self):
-		logging.info("ModnicaUsers:post(): ====>" + str(self.request) + " ::: ")
-		logging.info("ModnicaUsers:post(): ====>" + str(self.request.params) + " ::: ")
+		trace_art.debug("ModnicaUsers:post(): ====>" + str(self.request.params) + " ::: ")
 		
 		articleId  = self.request.get("article-isMain")
-		isMain     = self.request.get("article-isMain")
 
 		key = "article-isMain"
 		query = Article.all().filter("isMain", True)
@@ -423,16 +421,16 @@ class ModnicaArticles(AccountCabinet):
 			for article in articles:
 				if article.key().id() != articleId:
 					article.isMain = False
-					logging.info("DEBUG: ====> clearing isMain for " + str(article.key().id()))
-					article.put()
+					trace_art.debug("DEBUG: ====> clearing isMain for " + str(article.key().id()))
+					self.saveObj(article, {"article-" + str(article.key().id())})
 				else:
 					self.redirect("/articles")
 		
 		article    = Article.get_by_id(int(articleId))
 		if article:
-			article.isMain = bool(isMain)
-			logging.info("DEBUG: ====> setting isMain=" + str(isMain) + " for " + str(articleId))
-			self.saveObj(article, {"articles-list"})
+			article.isMain = True
+			trace_art.info("setting isMain=" + str(True) + " for <" + article.pagePath + "> articleId=" + str(articleId))
+			self.saveObj(article, {"articles-list", "main-page"})
 
 		self.redirect("/articles")
 
@@ -440,7 +438,7 @@ class ModnicaArticlesVersions(AccountCabinet):
 
 	def get(self, pagePath):
 		key = "pagePath-" + pagePath
-		logging.info("ModnicaArticlesVersions:get(): ====> pagePath=" + pagePath + ", key=" + key)
+		trace_art.info("ModnicaArticlesVersions: pagePath=" + pagePath + ", key=" + key)
 		query = Article.all()
 		query.filter("pagePath =", pagePath)
 		query.order("-created")
@@ -451,7 +449,7 @@ class ModnicaArticlesVersions(AccountCabinet):
 		articleId  = self.request.get("article-isLatest")
 		isLatest   = self.request.get("article-isLatest")
 
-		logging.info("ModnicaArticlesVersions:post(): ====> articleId=" + str(articleId))
+		trace_art.info("ModnicaArticlesVersions: articleId=" + str(articleId))
 
 		key = "article-isLatest-" + page_path
 		query = Article.all().filter("isLatest", True).filter("pagePath =", page_path)
@@ -463,17 +461,17 @@ class ModnicaArticlesVersions(AccountCabinet):
 			for article in articles:
 				if article.key().id() != articleId:
 					article.isLatest = False
-					logging.info("DEBUG: ====> clearing isLatest for " + str(article.key().id()))
+					trace_art.info("DEBUG: clearing isLatest for " + str(article.key().id()))
 					article.put()
 				else:
-					logging.info("no need to update isLatest for "+page_path+" : " + str(article.key().id()))
+					trace_art.info("no need to update isLatest for "+page_path+" : " + str(article.key().id()))
 					self.redirect("/articles")
 					return
 
 		article    = Article.get_by_id(int(articleId))
 		if article:
 			article.isLatest = bool(isLatest)
-			logging.info("DEBUG: ====> setting isLatest=" + str(isLatest) + " for " + str(articleId))
+			trace_art.info("setting isLatest=" + str(isLatest) + " for " + str(articleId))
 			article.put()
 		memcache.flush_all()
 
@@ -513,7 +511,7 @@ class ModnicaArticlesEdit(AccountCabinet):
 		query = Article.all().filter("__key__ =", db.Key.from_path('Article', int(page_id)))
 		entry, cache_age_message = self.getDbEntry(key, query)
 		if not entry:
-			logging.error("ModnicaArticlesEdit:get(): entry not found: " + page_id + page_path)
+			trace_art.error("ModnicaArticlesEdit:get(): entry not found: " + page_id + page_path)
 			self.redirect("/articles/post")
 			return
 		self.render_form(page_id, title=entry.title, content=entry.content, pagePath=entry.pagePath, createdBy=entry.createdBy, cache_age_message=cache_age_message)
@@ -539,10 +537,9 @@ class ModnicaArticlesEdit(AccountCabinet):
 		query = Article.all()
 		query.filter("pagePath =", pagePath)
 		query.filter("isLatest =", True)
-		trace_art.warn("DB QUERY: " + show_query(query))
-		entries = query.fetch(100)
+		entries, ignored_cache_age_message = self.getDbEntries("allLatest", query, 100)
 		for e in entries:
-			logging.error("===========+> CLEARING IS_LATEST for " + pagePath + ", id=" + str(e.key().id()))
+			trace_art.warn("CLEARING IS_LATEST for " + pagePath + ", id=" + str(e.key().id()))
 			e.isLatest = False
 			self.saveObj(e, {e.pagePath})
 		a = Article(title=title, content=content, createdBy=username, pagePath=pagePath, isLatest=True)
@@ -620,10 +617,10 @@ class ModnicaVitrinaEdit(AccountCabinet):
 
 		if moveIn:
 			idOnVitrina = 1+ self.getMaxIdOnVitrina()
-			logging.info("ModnicaVitrinaEdit:post() moveIn: ====> maxIdOnVitrina=" + str(idOnVitrina))
+			trace_vit.info("ModnicaVitrinaEdit:moveIn: ====> maxIdOnVitrina=" + str(idOnVitrina))
 			entry, cache_age_message = self.getDbEntryById("Product", productId)
 			if not entry:
-				logging.info("ModnicaVitrinaEdit:post() moveIn: ====> product not found id=" + str(productId))
+				trace_vit.error("ModnicaVitrinaEdit:moveIn: ====> product not found id=" + str(productId))
 				self.redirect("/vitrina/edit")
 				return
 			entry.idOnVitrina=idOnVitrina
@@ -634,7 +631,7 @@ class ModnicaVitrinaEdit(AccountCabinet):
 		if moveOut:
 			entry, cache_age_message = self.getDbEntryById("Product", productId)
 			if not entry:
-				logging.info("ModnicaVitrinaEdit:post(): ====> product not found for id=" + str(productId))
+				trace_vit.error("ModnicaVitrinaEdit:====> product not found for id=" + str(productId))
 				self.redirect("/vitrina/edit")
 				return
 			entry.idOnVitrina=-1
@@ -645,7 +642,7 @@ class ModnicaVitrinaEdit(AccountCabinet):
 		if moveLeft or moveRight:
 			entry, cache_age_message = self.getDbEntryById("Product", productId)
 			if not entry:
-				logging.info("ModnicaVitrinaEdit:post(): ====> product not found for id=" + str(productId))
+				trace_vit.error("ModnicaVitrinaEdit ====> product not found for id=" + str(productId))
 				self.redirect("/vitrina/edit")
 				return
 			if moveLeft:
@@ -654,13 +651,13 @@ class ModnicaVitrinaEdit(AccountCabinet):
 				foundEntry = self.getNextEntryOnVitrina(entry.idOnVitrina)
 			if not foundEntry:
 				if moveLeft:
-					logging.info("ModnicaVitrinaEdit:post(): ====> prev entry not found for idOnVitrina=" + str(entry.idOnVitrina))
+					trace_vit.error("ModnicaVitrinaEdit ====> prev entry not found for idOnVitrina=" + str(entry.idOnVitrina))
 				else:
-					logging.info("ModnicaVitrinaEdit:post(): ====> next entry not found for idOnVitrina=" + str(entry.idOnVitrina))
+					trace_vit.error("ModnicaVitrinaEdit ====> next entry not found for idOnVitrina=" + str(entry.idOnVitrina))
 				self.redirect("/vitrina/edit")
 				return
 			if entry.key().id() == foundEntry.key().id():
-				logging.info("ModnicaVitrinaEdit:post(): ====> got the same object id="+ str(foundEntry.key().id()) + " for idOnVitrina=" + str(entry.idOnVitrina))
+				trace_vit.warn("ModnicaVitrinaEdit:post(): ====> got the same object id="+ str(foundEntry.key().id()) + " for idOnVitrina=" + str(entry.idOnVitrina))
 			else:
 				adjIdOnVitrina = foundEntry.idOnVitrina
 				# swap
@@ -693,7 +690,7 @@ class ModnicaProductsVersions(AccountCabinet):
 
 	def get(self, pagePath):
 		key = "pagePath-" + pagePath
-		logging.info("ModnicaProductsVersions:get(): ====> pagePath=" + pagePath + ", key=" + key)
+		trace_prod.debug("ModnicaProductsVersions: pagePath=" + pagePath + ", key=" + key)
 		query = Product.all()
 		query.filter("pagePath =", pagePath)
 		query.order("-created")
@@ -704,7 +701,7 @@ class ModnicaProductsVersions(AccountCabinet):
 		productId  = self.request.get("product-isLatest")
 		isLatest   = self.request.get("product-isLatest")
 
-		logging.info("ModnicaProductsVersions:post(): ====> productId=" + str(productId))
+		race_prod.debug("ModnicaProductsVersions:productId=" + str(productId))
 
 		key = "product-isLatest-" + page_path
 		query = Product.all().filter("isLatest", True).filter("pagePath =", page_path)
@@ -716,17 +713,17 @@ class ModnicaProductsVersions(AccountCabinet):
 			for product in products:
 				if product.key().id() != productId:
 					product.isLatest = False
-					logging.info("DEBUG: ====> clearing isLatest for " + str(product.key().id()))
+					trace_prod.info("DEBUG: ====> clearing isLatest for " + str(product.key().id()))
 					product.put()
 				else:
-					logging.info("no need to update isLatest for "+page_path+" : " + str(product.key().id()))
+					trace_prod.info("no need to update isLatest for "+page_path+" : " + str(product.key().id()))
 					self.redirect("/products")
 					return
 
 		product    = Product.get_by_id(int(productId))
 		if product:
 			product.isLatest = bool(isLatest)
-			logging.info("DEBUG: ====> setting isLatest=" + str(isLatest) + " for " + str(productId))
+			trace_prod.info("DEBUG: ====> setting isLatest=" + str(isLatest) + " for " + str(productId))
 			product.put()
 		memcache.flush_all()
 
@@ -768,9 +765,9 @@ class ModnicaProductsPost(AccountCabinet):
 		query.filter("isLatest =", True)
 		entries, cache_age_message = self.getDbEntries("product-"+pagePath, query)
 		for e in entries:
-			logging.error("===========+> CLEARING IS_LATEST for " + pagePath + ", id=" + str(e.key().id()))
+			trace_prod.info("===========+> CLEARING IS_LATEST for " + pagePath + ", id=" + str(e.key().id()))
 			e.isLatest = False
-			logging.error("e=<"+str(e)+">")
+			trace_prod.debug("e=<"+str(e)+">")
 			self.saveObj(e, {"product-"+str(e.key().id()), "products-list"})
 		a = Product(title=title,content=content, price=price, pagePath=pagePath, isLatest=True)
 		self.saveObj(a, {"product-"+pagePath, "products-list", "vitrina-other"})
@@ -790,7 +787,7 @@ class ModnicaProductsEdit(AccountCabinet):
 		query = Product.all().filter("__key__ =", db.Key.from_path('Product', int(page_id)))
 		entry, cache_age_message = self.getDbEntry(key, query)
 		if not entry:
-			logging.error("ModnicaProductsEdit:get(): entry not found: " + page_id + page_path)
+			trace_prod.error("ModnicaProductsEdit: entry not found: " + page_id + page_path)
 			self.redirect("/products/post")
 			return
 		self.render_form(page_id, title=entry.title, content=entry.content, price=entry.price, pagePath=entry.pagePath, createdBy=entry.createdBy, idOnVitrina=entry.idOnVitrina, cache_age_message=cache_age_message)
@@ -807,7 +804,7 @@ class ModnicaProductsEdit(AccountCabinet):
 		pagePath = self.request.get("pagePath")
 		idOnVitrina = int(self.request.get("idOnVitrina"))
 		isShownOnVitrina = self.request.get("isShownOnVitrina")
-		logging.error("===========+> idOnVitrina=" + str(idOnVitrina) +" isShownOnVitrina= " + str(isShownOnVitrina))
+		trace_prod.debug("idOnVitrina=" + str(idOnVitrina) +" isShownOnVitrina= " + str(isShownOnVitrina))
 		if not title:
 			error = "Title is mandatory"
 		if not content:
@@ -824,16 +821,16 @@ class ModnicaProductsEdit(AccountCabinet):
 		else:
 			if idOnVitrina == -1:
 				isNewOnVitrina = True
-				logging.error("===========+> isNewOnVitrina= True")
+				trace_vit.info("isNewOnVitrina= True")
 		# clear latest flag
 		query = Product.all()
 		query.filter("pagePath =", pagePath)
 		query.filter("isLatest =", True)
 		entries, cache_age_message = self.getDbEntries("product-"+pagePath, query)
 		for e in entries:
-			logging.error("===========+> CLEARING IS_LATEST for " + pagePath + ", id=" + str(e.key().id()))
+			trace_prod.info("===========+> CLEARING IS_LATEST for " + pagePath + ", id=" + str(e.key().id()))
 			e.isLatest = False
-			logging.error("e=<"+str(e)+">")
+			trace_prod.debug("e=<"+str(e)+">")
 			self.saveObj(e, {"product-"+str(e.key().id()), "products-list"})
 		# get max idOnVitrina
 		if isNewOnVitrina == True:
@@ -853,13 +850,13 @@ class ModnicaProductsView(Account):
 
 	def get(self, page_path, page_id, pagePath):
 		username = self.getCurrentUsername()
-		logging.error("ModnicaProductsView:get(): id=<"+page_id+">, pagePath=<"+pagePath+">, path=<"+page_path+">")
+		trace_prod.debug("ModnicaProductsView:get(): id=<"+page_id+">, pagePath=<"+pagePath+">, path=<"+page_path+">")
 		
 		key      =  "product-"+page_id
 		query = Product.all().filter("__key__ =", db.Key.from_path('Product', int(page_id)))
 		entry, cache_age_message = self.getDbEntry(key, query)
 		if not entry:
-			logging.error("ModnicaProductsView:get(): entry not found: " + page_id + page_path)
+			trace_prod.error("ModnicaProductsView:get(): entry not found: " + page_id + page_path)
 			self.redirect("/products")
 			return
 		self.render_form(page_id, title=entry.title, content=entry.content, cache_age_message=cache_age_message)
@@ -870,13 +867,13 @@ class ModnicaProductsViewByPath(Account):
 
 	def get(self, page_path, pagePath):
 		username = self.getCurrentUsername()
-		logging.error("ModnicaProductsView:get(): pagePath=<"+pagePath+">, path=<"+page_path+">")
+		trace_prod.debug("ModnicaProductsView: pagePath=<"+pagePath+">, path=<"+page_path+">")
 		
 		key      =  "product-"+pagePath
 		query = Product.all().filter("pagePath", pagePath). filter("isLatest =", True)
 		entry, cache_age_message = self.getDbEntry(key, query)
 		if not entry:
-			logging.error("ModnicaProductsView:get(): entry not found: " + page_path + "; " + page_path)
+			trace_prod.error("ModnicaProductsView: entry not found: " + page_path + "; " + page_path)
 			self.redirect("/products")
 			return
 		self.render_form(title=entry.title, content=entry.content, cache_age_message=cache_age_message)
